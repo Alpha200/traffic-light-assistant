@@ -1,0 +1,20 @@
+[project]
+name = "traffic-light-assistant"
+version = "0.1.0"
+description = "Mobile-optimized app to store and manage a list of traffic lights"
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "duckdb>=0.9.0",
+    "python-multipart>=0.0.6",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

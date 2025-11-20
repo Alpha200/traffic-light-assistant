@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  traffic-light-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./traffic_lights.duckdb:/app/traffic_lights.duckdb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Development services
+  backend-dev:
+    image: python:3.14-slim
+    working_dir: /app
+    command: bash -c "pip install -e . && python main.py"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles:
+      - dev
+
+  frontend-dev:
+    image: node:18-alpine
+    working_dir: /app/frontend
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+    profiles:
+      - dev
