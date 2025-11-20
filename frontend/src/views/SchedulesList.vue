@@ -2,7 +2,7 @@
   <div class="schedules-container">
     <div class="schedules-header">
       <router-link :to="`/traffic-light/${trafficLightId}`" class="btn-back">← Back</router-link>
-      <h2>Green Light Schedules</h2>
+      <h2>Schedules</h2>
     </div>
 
     <!-- Add Button -->

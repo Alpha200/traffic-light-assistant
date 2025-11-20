@@ -3,7 +3,7 @@
     <div class="capture-card">
       <div class="card-header">
         <router-link :to="`/traffic-light/${trafficLightId}/schedules`" class="btn-back">← Back</router-link>
-        <h2>Capture Green Light Duration</h2>
+        <h2>Capture Duration</h2>
       </div>
 
       <div class="card-content">

@@ -2,7 +2,6 @@
   <div class="app-container">
     <header class="app-header">
       <h1>🚦 Traffic Light Assistant</h1>
-      <p class="subtitle">Manage your traffic lights</p>
     </header>
 
     <main class="app-main">
@@ -66,12 +65,6 @@ html, body, #app {
 
 .app-header h1 {
   font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-}
-
-.subtitle {
-  font-size: 0.9rem;
-  opacity: 0.9;
 }
 
 .app-main {
