@@ -9,8 +9,9 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - DB_PATH=/app/data/traffic_lights.duckdb
     volumes:
-      - ./traffic_lights.duckdb:/app/traffic_lights.duckdb
+      - app-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
@@ -43,3 +44,6 @@ services:
       - ./frontend:/app/frontend
     profiles:
       - dev
+
+volumes:
+  app-data:

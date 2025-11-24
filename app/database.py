@@ -4,7 +4,11 @@ import duckdb
 import uuid
 import os
 
-DB_PATH = "traffic_lights.duckdb"
+# Use /app/data for Docker volume, fallback to current directory for local development
+DB_PATH = os.getenv("DB_PATH", "/app/data/traffic_lights.duckdb")
+
+# Create data directory if it doesn't exist
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # Flag to track if tables have been initialized
 _tables_initialized = False

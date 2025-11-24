@@ -32,6 +32,12 @@ COPY main.py ./
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/frontend/dist ./static
 
+# Copy app directory
+COPY app ./app
+
+# Define volume for DuckDB persistence
+VOLUME ["/app/data"]
+
 # Expose port
 EXPOSE 8000
 
