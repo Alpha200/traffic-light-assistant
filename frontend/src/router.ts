@@ -29,12 +29,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/schedules',
+    path: '/traffic-light/:id/schedules',
     component: SchedulesList,
     meta: { requiresAuth: true }
   },
   {
-    path: '/schedule-capture/:id',
+    path: '/traffic-light/:id/schedules/capture',
     component: ScheduleCapture,
     meta: { requiresAuth: true }
   },
