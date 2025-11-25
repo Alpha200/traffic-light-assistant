@@ -10,6 +10,7 @@ Track and measure traffic lights with precise schedule capture. Built with FastA
 - 📊 View captured schedules for each traffic light
 - 🗑️ Delete traffic lights and schedules
 - 🌙 Dark theme, mobile-optimized design
+- 🔐 OpenID Connect authentication
 
 ## Quick Start
 
@@ -19,10 +20,11 @@ Track and measure traffic lights with precise schedule capture. Built with FastA
 
 ### Setup
 
-**Backend:**
+**Backend with environment variables:**
 ```bash
-poetry install  # or: pip install -r requirements.txt
-python main.py
+poetry install
+cp .env.example .env  # Configure OIDC settings
+./run.sh
 ```
 
 **Frontend:**
@@ -34,19 +36,19 @@ npm run dev
 
 Visit `http://localhost:5173` - API docs at `http://localhost:8000/docs`
 
-## Usage
+## Configuration
 
-1. Add a traffic light (location, coordinates, notes)
-2. Click a light to view details
-3. Click "Schedule Information" to capture green light durations
-4. Press "Capture Schedule" → "Start" when green turns on → "Stop" when it turns off
-5. View all captured schedules with durations
+Set these environment variables (or use `.env` file with `./run.sh`):
+- `OIDC_PROVIDER_URL` - OpenID Connect provider URL
+- `OIDC_CLIENT_ID` - Client ID for OIDC
+- `OIDC_AUDIENCE` - Audience/scope for tokens
+- `OIDC_ISSUER` - Token issuer (optional, defaults to provider_url)
 
 ## Database
 
-Uses DuckDB (auto-created on first run as `traffic_lights.duckdb`)
+Uses DuckDB (auto-created as `traffic_lights.duckdb`)
 
 ## Tech Stack
 
-- **Backend:** FastAPI, DuckDB, Python 3.14
+- **Backend:** FastAPI, DuckDB, httpx, python-jose
 - **Frontend:** Vue.js 3, Vue Router, Vite

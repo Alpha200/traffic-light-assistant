@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-light
+  namespace: traffic-light
+  labels:
+    app: traffic-light
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-light
+  template:
+    metadata:
+      labels:
+        app: traffic-light
+    spec:
+      containers:
+      - name: traffic-light
+        image: traffic-light:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: OIDC_AUDIENCE
+          value: "traffic-light"
+        - name: OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: traffic-light-secret
+              key: OIDC_CLIENT_ID
+        - name: OIDC_PROVIDER_URL
+          valueFrom:
+            secretKeyRef:
+              name: traffic-light-secret
+              key: OIDC_PROVIDER_URL
+        - name: OIDC_ISSUER
+          valueFrom:
+            secretKeyRef:
+              name: traffic-light-secret
+              key: OIDC_ISSUER
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data
+        emptyDir: {}
