@@ -1,5 +1,5 @@
 # Build stage for frontend
-FROM node:22-alpine as frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -21,10 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir poetry && \
     poetry config virtualenvs.create false && \
-    poetry install --only main
+    poetry install --only main --no-root
 
 # Copy backend code
 COPY main.py ./
