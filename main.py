@@ -1,8 +1,11 @@
 """Traffic Light Assistant API - Main entry point."""
 
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import traffic_lights, schedules
+from app.auth import get_current_user
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,6 +32,12 @@ app.include_router(schedules.router)
 def read_root():
     """Welcome endpoint"""
     return {"message": "Traffic Light Assistant API", "version": "0.1.0"}
+
+
+@app.get("/auth/me", tags=["Auth"])
+async def get_current_user_info(user: Annotated[dict, Depends(get_current_user)]):
+    """Get current authenticated user info"""
+    return user
 
 
 if __name__ == "__main__":

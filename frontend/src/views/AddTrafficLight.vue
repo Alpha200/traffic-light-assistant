@@ -65,52 +65,57 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'AddTrafficLight',
-  data() {
-    return {
-      newTrafficLight: {
-        location: '',
-        latitude: null,
-        longitude: null,
-        notes: ''
-      },
-      apiUrl: '/api/traffic-lights'
-    };
-  },
-  methods: {
-    async addTrafficLight() {
-      if (!this.newTrafficLight.location) {
-        alert('Please fill in all required fields');
-        return;
-      }
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-      try {
-        const response = await fetch(this.apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.newTrafficLight)
-        });
+interface TrafficLightInput {
+  location: string
+  latitude: number | null
+  longitude: number | null
+  notes: string
+}
 
-        if (!response.ok) throw new Error('Failed to add traffic light');
-        
-        // Reset form and navigate back
-        this.newTrafficLight = {
-          location: '',
-          latitude: null,
-          longitude: null,
-          notes: ''
-        };
-        
-        this.$router.push('/');
-      } catch (err) {
-        alert('Error: ' + err.message);
-        console.error(err);
-      }
-    }
+const router = useRouter()
+
+const newTrafficLight = ref<TrafficLightInput>({
+  location: '',
+  latitude: null,
+  longitude: null,
+  notes: ''
+})
+
+const apiUrl = '/api/traffic-lights'
+
+const addTrafficLight = async () => {
+  if (!newTrafficLight.value.location) {
+    alert('Please fill in all required fields')
+    return
   }
-};
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTrafficLight.value)
+    })
+
+    if (!response.ok) throw new Error('Failed to add traffic light')
+    
+    newTrafficLight.value = {
+      location: '',
+      latitude: null,
+      longitude: null,
+      notes: ''
+    }
+    
+    router.push('/')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    alert('Error: ' + message)
+    console.error(err)
+  }
+}
 </script>
 
 <style scoped>

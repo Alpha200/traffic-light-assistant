@@ -1,12 +1,15 @@
 """Schedule endpoints including pattern detection."""
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from datetime import datetime, timedelta
 from statistics import mean, stdev
 
 from app.models import Schedule, ScheduleCreate, SchedulePattern
 from app.database import get_connection, get_next_id
+from app.auth import get_current_user
 
 router = APIRouter(
     prefix="/api",
@@ -15,7 +18,7 @@ router = APIRouter(
 
 
 @router.get("/traffic-lights/{traffic_light_id}/schedules", response_model=List[Schedule])
-def get_schedules(traffic_light_id: str):
+def get_schedules(traffic_light_id: str, _: Annotated[dict, Depends(get_current_user)]):
     """Get all schedules for a traffic light"""
     try:
         conn = get_connection()
@@ -42,7 +45,7 @@ def get_schedules(traffic_light_id: str):
 
 
 @router.post("/traffic-lights/{traffic_light_id}/schedules", response_model=Schedule)
-def create_schedule(traffic_light_id: str, schedule: ScheduleCreate):
+def create_schedule(traffic_light_id: str, schedule: ScheduleCreate, _: Annotated[dict, Depends(get_current_user)]):
     """Create a new schedule for a traffic light"""
     try:
         # Verify traffic light exists
@@ -91,7 +94,7 @@ def create_schedule(traffic_light_id: str, schedule: ScheduleCreate):
 
 
 @router.delete("/schedules/{schedule_id}")
-def delete_schedule(schedule_id: str):
+def delete_schedule(schedule_id: str, _: Annotated[dict, Depends(get_current_user)]):
     """Delete a schedule"""
     try:
         conn = get_connection()
@@ -116,7 +119,7 @@ def delete_schedule(schedule_id: str):
 
 
 @router.get("/traffic-lights/{traffic_light_id}/pattern", response_model=SchedulePattern)
-def get_schedule_pattern(traffic_light_id: str):
+def get_schedule_pattern(traffic_light_id: str, _: Annotated[dict, Depends(get_current_user)]):
     """Analyze captured schedules and determine traffic light pattern"""
     try:
         conn = get_connection()

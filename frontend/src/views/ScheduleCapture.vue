@@ -70,111 +70,111 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'ScheduleCapture',
-  data() {
-    return {
-      trafficLightId: null,
-      measuring: false,
-      startTime: null,
-      endTime: null,
-      elapsedTime: 0,
-      timerInterval: null,
-      error: null,
-      loading: false,
-      apiUrl: '/api/traffic-lights'
-    };
-  },
-  methods: {
-    startCapture() {
-      this.error = null;
-      this.startTime = new Date();
-      this.endTime = null;
-      this.elapsedTime = 0;
-      this.measuring = true;
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-      // Update timer every millisecond for precision
-      this.timerInterval = setInterval(() => {
-        if (this.measuring && this.startTime) {
-          this.elapsedTime = Date.now() - this.startTime.getTime();
-        }
-      }, 10);
-    },
+const route = useRoute()
+const router = useRouter()
 
-    stopCapture() {
-      if (!this.measuring) return;
-      
-      this.measuring = false;
-      this.endTime = new Date();
-      this.elapsedTime = this.endTime.getTime() - this.startTime.getTime();
-      
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-    },
+const trafficLightId = ref<string | string[] | undefined>()
+const measuring = ref(false)
+const startTime = ref<Date | null>(null)
+const endTime = ref<Date | null>(null)
+const elapsedTime = ref(0)
+let timerInterval: number | null = null
+const error = ref<string | null>(null)
+const loading = ref(false)
+const apiUrl = '/api/traffic-lights'
 
-    cancelCapture() {
-      this.measuring = false;
-      this.startTime = null;
-      this.endTime = null;
-      this.elapsedTime = 0;
-      this.error = null;
-      
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-    },
+const startCapture = () => {
+  error.value = null
+  startTime.value = new Date()
+  endTime.value = null
+  elapsedTime.value = 0
+  measuring.value = true
 
-    async submitCapture() {
-      if (!this.startTime || !this.endTime) {
-        this.error = 'Invalid capture data';
-        return;
-      }
-
-      this.loading = true;
-      this.error = null;
-
-      try {
-        const payload = {
-          traffic_light_id: this.trafficLightId,
-          green_start: this.startTime.toISOString(),
-          green_end: this.endTime.toISOString()
-        };
-
-        const response = await fetch(`${this.apiUrl}/${this.trafficLightId}/schedules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.detail || 'Failed to save capture');
-        }
-
-        // Navigate back to schedules list
-        this.$router.push(`/traffic-light/${this.trafficLightId}/schedules`);
-      } catch (err) {
-        this.error = err.message;
-        console.error(err);
-      } finally {
-        this.loading = false;
-      }
+  timerInterval = setInterval(() => {
+    if (measuring.value && startTime.value) {
+      elapsedTime.value = Date.now() - startTime.value.getTime()
     }
-  },
-  beforeUnmount() {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
-    }
-  },
-  mounted() {
-    this.trafficLightId = this.$route.params.id;
+  }, 10)
+}
+
+const stopCapture = () => {
+  if (!measuring.value) return
+  
+  measuring.value = false
+  endTime.value = new Date()
+  if (startTime.value) {
+    elapsedTime.value = endTime.value.getTime() - startTime.value.getTime()
   }
-};
+  
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
+}
+
+const cancelCapture = () => {
+  measuring.value = false
+  startTime.value = null
+  endTime.value = null
+  elapsedTime.value = 0
+  error.value = null
+  
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
+}
+
+const submitCapture = async () => {
+  if (!startTime.value || !endTime.value) {
+    error.value = 'Invalid capture data'
+    return
+  }
+
+  loading.value = true
+  error.value = null
+
+  try {
+    const payload = {
+      traffic_light_id: trafficLightId.value,
+      green_start: startTime.value.toISOString(),
+      green_end: endTime.value.toISOString()
+    }
+
+    const response = await fetch(`${apiUrl}/${trafficLightId.value}/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const data = await response.json() as { detail?: string }
+      throw new Error(data.detail || 'Failed to save capture')
+    }
+
+    router.push(`/traffic-light/${trafficLightId.value}/schedules`)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unknown error'
+    console.error(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  trafficLightId.value = route.params.id
+})
+
+onBeforeUnmount(() => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
+})
 </script>
 
 <style scoped>

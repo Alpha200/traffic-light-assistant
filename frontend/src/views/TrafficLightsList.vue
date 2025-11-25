@@ -41,44 +41,45 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'TrafficLightsList',
-  data() {
-    return {
-      trafficLights: [],
-      apiUrl: '/api/traffic-lights'
-    };
-  },
-  computed: {
-    filteredTrafficLights() {
-      return this.trafficLights;
-    }
-  },
-  methods: {
-    async fetchTrafficLights() {
-      try {
-        const response = await fetch(this.apiUrl);
-        if (!response.ok) throw new Error('Failed to fetch traffic lights');
-        this.trafficLights = await response.json();
-      } catch (err) {
-        console.error(err);
-      }
-    },
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 
-    formatDate(dateString) {
-      try {
-        const date = new Date(dateString);
-        return date.toLocaleString();
-      } catch {
-        return dateString;
-      }
-    }
-  },
-  mounted() {
-    this.fetchTrafficLights();
+interface TrafficLight {
+  id: string
+  location: string
+  latitude: number | null
+  longitude: number | null
+  notes: string
+  last_updated: string
+}
+
+const trafficLights = ref<TrafficLight[]>([])
+const apiUrl = '/api/traffic-lights'
+
+const filteredTrafficLights = computed(() => trafficLights.value)
+
+const fetchTrafficLights = async () => {
+  try {
+    const response = await fetch(apiUrl)
+    if (!response.ok) throw new Error('Failed to fetch traffic lights')
+    trafficLights.value = await response.json()
+  } catch (err) {
+    console.error(err)
   }
-};
+}
+
+const formatDate = (dateString: string): string => {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  } catch {
+    return dateString
+  }
+}
+
+onMounted(() => {
+  fetchTrafficLights()
+})
 </script>
 
 <style scoped>

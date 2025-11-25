@@ -1,7 +1,13 @@
 <template>
   <div class="app-container">
     <header class="app-header">
-      <h1>🚦 Traffic Light Assistant</h1>
+      <div class="header-content">
+        <h1>🚦 Traffic Light Assistant</h1>
+        <div class="header-user">
+          <span v-if="user" class="user-info">{{ user.name || user.preferred_username || user.sub }}</span>
+          <button v-if="isAuthenticated" @click="logout" class="btn-logout">Logout</button>
+        </div>
+      </div>
     </header>
 
     <main class="app-main">
@@ -17,16 +23,36 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'App',
-  data() {
-    return {
-      loading: false,
-      error: null
-    };
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import type { AuthManager } from './auth'
+
+const router = useRouter()
+
+const loading = ref(false)
+const error = ref<string | null>(null)
+const user = ref<Record<string, any> | null>(null)
+
+// Get injected services from global properties
+const $authManager = (window as any).__APP__?.config.globalProperties.$authManager as AuthManager
+
+const isAuthenticated = computed(() => {
+  return $authManager?.isAuthenticated() ?? false
+})
+
+onMounted(() => {
+  if ($authManager) {
+    user.value = $authManager.getUser()
   }
-};
+})
+
+const logout = () => {
+  if ($authManager) {
+    $authManager.logout()
+  }
+  router.push('/callback')
+}
 </script>
 
 <style>
@@ -59,12 +85,44 @@ html, body, #app {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 1.5rem;
-  text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .app-header h1 {
   font-size: 1.8rem;
+  margin: 0;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.btn-logout {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .app-main {
@@ -116,8 +174,18 @@ html, body, #app {
     padding: 1rem;
   }
 
+  .header-content {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
   .app-header h1 {
     font-size: 1.5rem;
+  }
+
+  .header-user {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .app-main {

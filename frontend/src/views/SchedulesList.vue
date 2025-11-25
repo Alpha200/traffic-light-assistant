@@ -51,66 +51,73 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'SchedulesList',
-  data() {
-    return {
-      trafficLightId: null,
-      schedules: [],
-      apiUrl: '/api/traffic-lights'
-    };
-  },
-  methods: {
-    async fetchSchedules() {
-      try {
-        const response = await fetch(`${this.apiUrl}/${this.trafficLightId}/schedules`);
-        if (!response.ok) throw new Error('Failed to fetch schedules');
-        this.schedules = await response.json();
-      } catch (err) {
-        console.error(err);
-      }
-    },
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 
-    async deleteSchedule(scheduleId) {
-      if (!confirm('Are you sure you want to delete this schedule?')) return;
+interface Schedule {
+  id: string
+  green_start: string
+  green_end: string
+  duration_ms: number
+  created_at: string
+}
 
-      try {
-        const response = await fetch(`${this.apiUrl.replace('/api/traffic-lights', '/api/schedules')}/${scheduleId}`, {
-          method: 'DELETE'
-        });
+const route = useRoute()
 
-        if (!response.ok) throw new Error('Failed to delete schedule');
-        this.schedules = this.schedules.filter(s => s.id !== scheduleId);
-      } catch (err) {
-        console.error(err);
-        alert('Error: ' + err.message);
-      }
-    },
+const trafficLightId = ref<string | string[] | undefined>()
+const schedules = ref<Schedule[]>([])
+const apiUrl = '/api/traffic-lights'
 
-    formatDate(dateString) {
-      try {
-        const date = new Date(dateString);
-        return date.toLocaleString();
-      } catch {
-        return dateString;
-      }
-    },
-
-    formatDuration(milliseconds) {
-      const seconds = Math.floor(milliseconds / 1000);
-      const ms = milliseconds % 1000;
-      if (seconds > 0) {
-        return `${seconds}s ${ms}ms`;
-      }
-      return `${ms}ms`;
-    }
-  },
-  mounted() {
-    this.trafficLightId = this.$route.params.id;
-    this.fetchSchedules();
+const fetchSchedules = async () => {
+  try {
+    const response = await fetch(`${apiUrl}/${trafficLightId.value}/schedules`)
+    if (!response.ok) throw new Error('Failed to fetch schedules')
+    schedules.value = await response.json()
+  } catch (err) {
+    console.error(err)
   }
-};
+}
+
+const deleteSchedule = async (scheduleId: string) => {
+  if (!confirm('Are you sure you want to delete this schedule?')) return
+
+  try {
+    const response = await fetch(`/api/schedules/${scheduleId}`, {
+      method: 'DELETE'
+    })
+
+    if (!response.ok) throw new Error('Failed to delete schedule')
+    schedules.value = schedules.value.filter(s => s.id !== scheduleId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error(err)
+    alert('Error: ' + message)
+  }
+}
+
+const formatDate = (dateString: string): string => {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  } catch {
+    return dateString
+  }
+}
+
+const formatDuration = (milliseconds: number): string => {
+  const seconds = Math.floor(milliseconds / 1000)
+  const ms = milliseconds % 1000
+  if (seconds > 0) {
+    return `${seconds}s ${ms}ms`
+  }
+  return `${ms}ms`
+}
+
+onMounted(() => {
+  trafficLightId.value = route.params.id
+  fetchSchedules()
+})
 </script>
 
 <style scoped>

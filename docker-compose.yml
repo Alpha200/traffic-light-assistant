@@ -10,6 +10,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DB_PATH=/app/data/traffic_lights.duckdb
+      # OpenID Connect Configuration (required)
+      - OIDC_PROVIDER_URL=https://keycloak.example.com/realms/my-realm
+      - OIDC_AUDIENCE=traffic-light-app
+      # Optional: Override issuer if different from provider URL
+      # - OIDC_ISSUER=https://keycloak.example.com/realms/my-realm
     volumes:
       - app-data:/app/data
     restart: unless-stopped

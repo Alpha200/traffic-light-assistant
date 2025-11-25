@@ -1,10 +1,13 @@
 """Traffic light endpoints."""
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 
 from app.models import TrafficLight, TrafficLightCreate, TrafficLightUpdate
 from app.database import get_connection, get_next_id
+from app.auth import get_current_user
 
 router = APIRouter(
     prefix="/api/traffic-lights",
@@ -13,7 +16,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[TrafficLight])
-def get_traffic_lights():
+def get_traffic_lights(_: Annotated[dict, Depends(get_current_user)]):
     """Get all traffic lights"""
     try:
         conn = get_connection()
@@ -43,7 +46,7 @@ def get_traffic_lights():
 
 
 @router.post("", response_model=TrafficLight)
-def create_traffic_light(traffic_light: TrafficLightCreate):
+def create_traffic_light(traffic_light: TrafficLightCreate, _: Annotated[dict, Depends(get_current_user)]):
     """Create a new traffic light"""
     try:
         conn = get_connection()
@@ -79,7 +82,7 @@ def create_traffic_light(traffic_light: TrafficLightCreate):
 
 
 @router.get("/{traffic_light_id}", response_model=TrafficLight)
-def get_traffic_light(traffic_light_id: str):
+def get_traffic_light(traffic_light_id: str, _: Annotated[dict, Depends(get_current_user)]):
     """Get a specific traffic light by ID"""
     try:
         conn = get_connection()
@@ -111,7 +114,7 @@ def get_traffic_light(traffic_light_id: str):
 
 
 @router.put("/{traffic_light_id}", response_model=TrafficLight)
-def update_traffic_light(traffic_light_id: str, traffic_light: TrafficLightUpdate):
+def update_traffic_light(traffic_light_id: str, traffic_light: TrafficLightUpdate, _: Annotated[dict, Depends(get_current_user)]):
     """Update a traffic light"""
     try:
         conn = get_connection()
@@ -177,7 +180,7 @@ def update_traffic_light(traffic_light_id: str, traffic_light: TrafficLightUpdat
 
 
 @router.delete("/{traffic_light_id}")
-def delete_traffic_light(traffic_light_id: str):
+def delete_traffic_light(traffic_light_id: str, _: Annotated[dict, Depends(get_current_user)]):
     """Delete a traffic light"""
     try:
         conn = get_connection()
@@ -203,7 +206,7 @@ def delete_traffic_light(traffic_light_id: str):
 
 
 @router.delete("")
-def delete_all_traffic_lights():
+def delete_all_traffic_lights(_: Annotated[dict, Depends(get_current_user)]):
     """Delete all traffic lights"""
     try:
         conn = get_connection()
