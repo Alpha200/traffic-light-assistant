@@ -15,9 +15,10 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies and nginx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies
@@ -35,11 +36,18 @@ COPY --from=frontend-builder /app/frontend/dist ./static
 # Copy app directory
 COPY app ./app
 
+# Copy nginx config
+COPY nginx.conf /etc/nginx/sites-available/default
+
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Define volume for DuckDB persistence
 VOLUME ["/app/data"]
 
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["python", "main.py"]
+# Run entrypoint
+CMD ["/app/entrypoint.sh"]

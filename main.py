@@ -1,11 +1,9 @@
 """Traffic Light Assistant API - Main entry point."""
 
 from typing import Annotated
-from pathlib import Path
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from app.routes import traffic_lights, schedules
 from app.auth import get_current_user
 
@@ -36,13 +34,7 @@ async def get_current_user_info(user: Annotated[dict, Depends(get_current_user)]
     return user
 
 
-# Mount static files for frontend at the root
-static_path = Path(__file__).parent / "static"
-if static_path.exists():
-    app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
-
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8001)
 
