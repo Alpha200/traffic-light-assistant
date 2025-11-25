@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: traffic-light
-  namespace: traffic-light
   labels:
     app: traffic-light
 spec:
@@ -64,4 +63,5 @@ spec:
           periodSeconds: 5
       volumes:
       - name: data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: traffic-light-data
