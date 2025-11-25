@@ -66,8 +66,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
+import type { ApiClient } from '../api'
 
 interface TrafficLightInput {
   location: string
@@ -77,6 +78,8 @@ interface TrafficLightInput {
 }
 
 const router = useRouter()
+const instance = getCurrentInstance()
+const apiClient = instance?.appContext.config.globalProperties.$apiClient as ApiClient
 
 const newTrafficLight = ref<TrafficLightInput>({
   location: '',
@@ -85,8 +88,6 @@ const newTrafficLight = ref<TrafficLightInput>({
   notes: ''
 })
 
-const apiUrl = '/api/traffic-lights'
-
 const addTrafficLight = async () => {
   if (!newTrafficLight.value.location) {
     alert('Please fill in all required fields')
@@ -94,13 +95,7 @@ const addTrafficLight = async () => {
   }
 
   try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newTrafficLight.value)
-    })
-
-    if (!response.ok) throw new Error('Failed to add traffic light')
+    await apiClient.post('/api/traffic-lights', newTrafficLight.value)
     
     newTrafficLight.value = {
       location: '',

@@ -71,11 +71,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { ApiClient } from '../api'
 
 const route = useRoute()
 const router = useRouter()
+const instance = getCurrentInstance()
+const apiClient = instance?.appContext.config.globalProperties.$apiClient as ApiClient
 
 const trafficLightId = ref<string | string[] | undefined>()
 const measuring = ref(false)
@@ -85,7 +88,6 @@ const elapsedTime = ref(0)
 let timerInterval: number | null = null
 const error = ref<string | null>(null)
 const loading = ref(false)
-const apiUrl = '/api/traffic-lights'
 
 const startCapture = () => {
   error.value = null
@@ -145,17 +147,7 @@ const submitCapture = async () => {
       green_end: endTime.value.toISOString()
     }
 
-    const response = await fetch(`${apiUrl}/${trafficLightId.value}/schedules`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    if (!response.ok) {
-      const data = await response.json() as { detail?: string }
-      throw new Error(data.detail || 'Failed to save capture')
-    }
-
+    await apiClient.post(`/api/traffic-lights/${trafficLightId.value}/schedules`, payload)
     router.push(`/traffic-light/${trafficLightId.value}/schedules`)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unknown error'

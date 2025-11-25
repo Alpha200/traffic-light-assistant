@@ -52,8 +52,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, getCurrentInstance } from 'vue'
 import { useRoute } from 'vue-router'
+import type { ApiClient } from '../api'
 
 interface Schedule {
   id: string
@@ -64,16 +65,15 @@ interface Schedule {
 }
 
 const route = useRoute()
+const instance = getCurrentInstance()
+const apiClient = instance?.appContext.config.globalProperties.$apiClient as ApiClient
 
 const trafficLightId = ref<string | string[] | undefined>()
 const schedules = ref<Schedule[]>([])
-const apiUrl = '/api/traffic-lights'
 
 const fetchSchedules = async () => {
   try {
-    const response = await fetch(`${apiUrl}/${trafficLightId.value}/schedules`)
-    if (!response.ok) throw new Error('Failed to fetch schedules')
-    schedules.value = await response.json()
+    schedules.value = await apiClient.get<Schedule[]>(`/api/traffic-lights/${trafficLightId.value}/schedules`)
   } catch (err) {
     console.error(err)
   }
@@ -83,11 +83,7 @@ const deleteSchedule = async (scheduleId: string) => {
   if (!confirm('Are you sure you want to delete this schedule?')) return
 
   try {
-    const response = await fetch(`/api/schedules/${scheduleId}`, {
-      method: 'DELETE'
-    })
-
-    if (!response.ok) throw new Error('Failed to delete schedule')
+    await apiClient.delete(`/api/schedules/${scheduleId}`)
     schedules.value = schedules.value.filter(s => s.id !== scheduleId)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

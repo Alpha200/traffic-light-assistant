@@ -4,15 +4,11 @@ import logging
 from typing import Annotated
 
 import httpx
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi import Depends, HTTPException, status, Header
 from jose import JWTError, jwt
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
-
-# Security scheme
-security = HTTPBearer()
 
 
 class OIDCSettings(BaseSettings):
@@ -24,12 +20,12 @@ class OIDCSettings(BaseSettings):
     class Config:
         env_prefix = "OIDC_"
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        # Default issuer to provider_url if not specified
-        if not self.issuer:
-            self.issuer = self.provider_url.rstrip('/')
-        self.well_known_url = f"{self.provider_url.rstrip('/')}/.well-known/openid-configuration"
+    @property
+    def well_known_url(self) -> str:
+        return f"{self.provider_url.rstrip('/')}/.well-known/openid-configuration"
+    
+    def get_issuer(self) -> str:
+        return self.issuer or self.provider_url.rstrip('/')
 
 
 # Global cache for JWKS
@@ -74,7 +70,7 @@ async def get_jwks() -> dict:
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthCredentials, Depends(security)]
+    authorization: Annotated[str | None, Header()] = None
 ) -> dict:
     """
     Validate the JWT token and return the user claims.
@@ -83,8 +79,23 @@ async def get_current_user(
     Use it as: `user: Annotated[dict, Depends(get_current_user)]`
     """
     try:
+        if not authorization:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Extract token from Bearer scheme
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authorization scheme",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
         settings = OIDCSettings()
-        token = credentials.credentials
         
         # Get JWKS for verification
         jwks = await get_jwks()
@@ -95,7 +106,7 @@ async def get_current_user(
             jwks,
             algorithms=["RS256"],
             audience=settings.audience,
-            issuer=settings.issuer,
+            issuer=settings.get_issuer(),
             options={"verify_signature": True}
         )
         
@@ -108,6 +119,8 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Authentication error: {e}")
         raise HTTPException(

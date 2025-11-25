@@ -3,7 +3,7 @@ name = "traffic-light-assistant"
 version = "0.1.0"
 description = "Mobile-optimized app to store and manage a list of traffic lights"
 authors = [
-    {name = "Your Name",email = "you@example.com"}
+    {name = "Daniel Sendzik"}
 ]
 readme = "README.md"
 requires-python = ">=3.14"
@@ -14,6 +14,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "python-jose[cryptography]>=3.3.0",
     "pydantic-settings>=2.0.0",
+    "httpx>=0.28.1",
 ]
 
 

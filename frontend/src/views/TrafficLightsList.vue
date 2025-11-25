@@ -42,7 +42,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
+import type { ApiClient } from '../api'
 
 interface TrafficLight {
   id: string
@@ -53,16 +54,16 @@ interface TrafficLight {
   last_updated: string
 }
 
+const instance = getCurrentInstance()
+const apiClient = instance?.appContext.config.globalProperties.$apiClient as ApiClient
+
 const trafficLights = ref<TrafficLight[]>([])
-const apiUrl = '/api/traffic-lights'
 
 const filteredTrafficLights = computed(() => trafficLights.value)
 
 const fetchTrafficLights = async () => {
   try {
-    const response = await fetch(apiUrl)
-    if (!response.ok) throw new Error('Failed to fetch traffic lights')
-    trafficLights.value = await response.json()
+    trafficLights.value = await apiClient.get<TrafficLight[]>('/api/traffic-lights')
   } catch (err) {
     console.error(err)
   }

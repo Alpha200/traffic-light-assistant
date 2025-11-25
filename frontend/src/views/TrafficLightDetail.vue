@@ -103,8 +103,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { ApiClient } from '../api'
 
 interface TrafficLight {
   id: string
@@ -129,19 +130,18 @@ interface SchedulePattern {
 
 const route = useRoute()
 const router = useRouter()
+const instance = getCurrentInstance()
+const apiClient = instance?.appContext.config.globalProperties.$apiClient as ApiClient
 
 const trafficLight = ref<TrafficLight | null>(null)
 const pattern = ref<SchedulePattern | null>(null)
-const apiUrl = '/api/traffic-lights'
 let countdownTimer: number | null = null
 const currentTime = ref(new Date())
 
 const fetchTrafficLight = async () => {
   const id = route.params.id
   try {
-    const response = await fetch(`${apiUrl}/${id}`)
-    if (!response.ok) throw new Error('Failed to fetch traffic light')
-    trafficLight.value = await response.json()
+    trafficLight.value = await apiClient.get<TrafficLight>(`/api/traffic-lights/${id}`)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error(err)
@@ -152,9 +152,7 @@ const fetchTrafficLight = async () => {
 const fetchSchedulePattern = async () => {
   const id = route.params.id
   try {
-    const response = await fetch(`${apiUrl}/${id}/pattern`)
-    if (!response.ok) throw new Error('Failed to fetch schedule pattern')
-    pattern.value = await response.json()
+    pattern.value = await apiClient.get<SchedulePattern>(`/api/traffic-lights/${id}/pattern`)
   } catch (err) {
     console.error(err)
   }
@@ -165,11 +163,7 @@ const deleteTrafficLight = async () => {
 
   const id = route.params.id
   try {
-    const response = await fetch(`${apiUrl}/${id}`, {
-      method: 'DELETE'
-    })
-
-    if (!response.ok) throw new Error('Failed to delete traffic light')
+    await apiClient.delete(`/api/traffic-lights/${id}`)
     router.push('/')
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
