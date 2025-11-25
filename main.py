@@ -1,9 +1,11 @@
 """Traffic Light Assistant API - Main entry point."""
 
 from typing import Annotated
+from pathlib import Path
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.routes import traffic_lights, schedules
 from app.auth import get_current_user
 
@@ -28,16 +30,16 @@ app.include_router(traffic_lights.router)
 app.include_router(schedules.router)
 
 
-@app.get("/", tags=["Root"])
-def read_root():
-    """Welcome endpoint"""
-    return {"message": "Traffic Light Assistant API", "version": "0.1.0"}
-
-
 @app.get("/auth/me", tags=["Auth"])
 async def get_current_user_info(user: Annotated[dict, Depends(get_current_user)]):
     """Get current authenticated user info"""
     return user
+
+
+# Mount static files for frontend at the root
+static_path = Path(__file__).parent / "static"
+if static_path.exists():
+    app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 
 
 if __name__ == "__main__":
