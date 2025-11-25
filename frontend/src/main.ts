@@ -6,7 +6,7 @@ import { ApiClient } from './api'
 
 // Configuration from environment variables
 const OIDC_PROVIDER_URL = import.meta.env.VITE_OIDC_PROVIDER_URL || 'https://sso.sendzik.eu/realms/home'
-const OIDC_CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID || 'trafficlight-debug'
+const OIDC_CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID || 'trafficlight'
 const OIDC_REDIRECT_URI = import.meta.env.VITE_OIDC_REDIRECT_URI || `${window.location.origin}/callback`
 
 // Initialize OIDC
