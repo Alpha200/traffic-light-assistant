@@ -4,12 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from datetime import datetime, timedelta
-from statistics import mean, stdev
+from datetime import datetime
 
 from app.models import Schedule, ScheduleCreate, SchedulePattern
 from app.database import get_connection, get_next_id
 from app.auth import get_current_user
+from app.services import PatternDetector
 
 router = APIRouter(
     prefix="/api",
@@ -120,7 +120,7 @@ def delete_schedule(schedule_id: str, _: Annotated[dict, Depends(get_current_use
 
 @router.get("/traffic-lights/{traffic_light_id}/pattern", response_model=SchedulePattern)
 def get_schedule_pattern(traffic_light_id: str, _: Annotated[dict, Depends(get_current_user)]):
-    """Analyze captured schedules and determine traffic light pattern"""
+    """Analyze captured schedules and determine traffic light pattern with daily pattern detection"""
     try:
         conn = get_connection()
         
@@ -153,73 +153,15 @@ def get_schedule_pattern(traffic_light_id: str, _: Annotated[dict, Depends(get_c
         green_starts = [datetime.fromisoformat(str(row[1]).replace('Z', '+00:00')) for row in result]
         green_ends = [datetime.fromisoformat(str(row[2]).replace('Z', '+00:00')) for row in result]
         
-        total_captures = len(durations)
+        # Use PatternDetector service to analyze patterns
+        detector = PatternDetector(green_starts, durations)
+        pattern_data = detector.analyze()
+        
+        # Add last_capture to the result
         last_capture = str(green_ends[-1]) if green_ends else None
+        pattern_data["last_capture"] = last_capture
         
-        # Calculate statistics for duration
-        avg_duration = int(mean(durations))
-        min_duration = min(durations)
-        max_duration = max(durations)
-        
-        # Calculate cycle time (time between green phase starts)
-        cycle_times = []
-        if len(green_starts) >= 2:
-            for i in range(len(green_starts) - 1):
-                cycle_ms = int((green_starts[i + 1] - green_starts[i]).total_seconds() * 1000)
-                cycle_times.append(cycle_ms)
-        
-        avg_cycle_ms = None
-        if cycle_times:
-            avg_cycle_ms = int(mean(cycle_times))
-        
-        # Determine regularity
-        if total_captures >= 3:
-            std_dev = stdev(durations)
-            # If standard deviation is less than 10% of mean, it's regular
-            regularity_threshold = avg_duration * 0.1
-            
-            if std_dev < regularity_threshold:
-                schedule_regularity = "regular"
-            elif std_dev < regularity_threshold * 2:
-                schedule_regularity = "somewhat_regular"
-            else:
-                schedule_regularity = "irregular"
-        else:
-            std_dev = None
-            schedule_regularity = None
-        
-        # Predict next green phase
-        next_green_start = None
-        next_green_end = None
-        
-        if avg_cycle_ms and len(green_starts) > 0:
-            # Calculate time since last green start
-            last_green_start = green_starts[-1]
-            now = datetime.now(last_green_start.tzinfo)
-            
-            # Predict next start by adding average cycle time to last start
-            from datetime import timedelta
-            next_start_dt = last_green_start + timedelta(milliseconds=avg_cycle_ms)
-            next_green_start = next_start_dt.isoformat()
-            
-            # Predict next end based on average duration
-            next_end_dt = next_start_dt + timedelta(milliseconds=avg_duration)
-            next_green_end = next_end_dt.isoformat()
-        
-        return SchedulePattern(
-            has_pattern=True,
-            average_duration_ms=avg_duration,
-            min_duration_ms=min_duration,
-            max_duration_ms=max_duration,
-            stddev_duration_ms=std_dev,
-            typical_duration_ms=avg_duration,
-            schedule_regularity=schedule_regularity,
-            total_captures=total_captures,
-            last_capture=last_capture,
-            average_cycle_ms=avg_cycle_ms,
-            next_green_start=next_green_start,
-            next_green_end=next_green_end
-        )
+        return SchedulePattern(**pattern_data)
     except HTTPException:
         raise
     except Exception as e:
