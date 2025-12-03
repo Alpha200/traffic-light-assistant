@@ -55,5 +55,21 @@ class SchedulePattern(BaseModel):
     total_captures: int = 0
     last_capture: Optional[str] = None
     average_cycle_ms: Optional[int] = None  # Average time between green phase starts
+    red_duration_ms: Optional[int] = None  # Duration of red phase
     next_green_start: Optional[str] = None  # Predicted next green phase start
     next_green_end: Optional[str] = None  # Predicted next green phase end
+
+
+class TimelineEntry(BaseModel):
+    """Single entry in the predicted timeline"""
+    start_time: str = Field(..., description="ISO format timestamp")
+    end_time: str = Field(..., description="ISO format timestamp")
+    state: str = Field(..., description="Traffic light state: 'green' or 'red'")
+
+
+class DailyTimeline(BaseModel):
+    """Predicted pattern for a full day"""
+    date: str = Field(..., description="Date for this timeline")
+    has_pattern: bool
+    entries: list[TimelineEntry] = Field(default_factory=list)
+    validation: Optional[dict] = None  # Pattern validation info

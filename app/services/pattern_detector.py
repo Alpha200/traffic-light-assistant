@@ -1,19 +1,19 @@
 """Pattern detection service for traffic light schedules."""
 
 from typing import List, Dict, Tuple, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from statistics import mean, stdev
-from collections import defaultdict
 
 
 class PatternDetector:
     """
     Service for detecting traffic light schedule patterns.
     
-    Handles sparse measurements and detects daily repeating patterns by:
-    - Grouping measurements by time-of-day periods
-    - Detecting patterns at similar times across different days
-    - Predicting next green phases based on historical patterns
+    Uses a simplified approach:
+    - Finds the smallest red gap between consecutive green lights (the base cycle)
+    - Assumes this pattern repeats throughout the day
+    - Projects the pattern over 24 hours
+    - Validates the pattern against other measurements
     """
     
     def __init__(self, timestamps: List[datetime], durations: List[int]):
@@ -46,28 +46,24 @@ class PatternDetector:
         min_duration = min(self.durations)
         max_duration = max(self.durations)
         
-        # Group by time periods and detect patterns
-        time_periods = self._group_by_time_periods()
-        daily_patterns = self._detect_daily_patterns()
-        
-        # Calculate cycle time
-        avg_cycle_ms = self._calculate_average_cycle(daily_patterns)
-        
-        # Determine regularity
-        schedule_regularity = self._determine_regularity(time_periods, daily_patterns)
-        
-        # Predict next green phase
-        next_green_start, next_green_end = self._predict_next_green_phase(
-            daily_patterns, avg_duration, avg_cycle_ms
-        )
-        
         # Calculate standard deviation
         std_dev = None
         if self.total_captures >= 3:
             std_dev = stdev(self.durations)
         
+        # Find the base pattern (smallest red gap)
+        base_cycle_ms, red_duration_ms = self._find_base_cycle()
+        
+        # Determine regularity
+        schedule_regularity = self._determine_regularity()
+        
+        # Predict next green phase
+        next_green_start, next_green_end = self._predict_next_green_phase(
+            base_cycle_ms, avg_duration
+        )
+        
         return {
-            "has_pattern": True,
+            "has_pattern": base_cycle_ms is not None,
             "average_duration_ms": avg_duration,
             "min_duration_ms": min_duration,
             "max_duration_ms": max_duration,
@@ -75,120 +71,61 @@ class PatternDetector:
             "typical_duration_ms": avg_duration,
             "schedule_regularity": schedule_regularity,
             "total_captures": self.total_captures,
-            "average_cycle_ms": avg_cycle_ms,
+            "average_cycle_ms": base_cycle_ms,
+            "red_duration_ms": red_duration_ms,
             "next_green_start": next_green_start,
             "next_green_end": next_green_end
         }
     
-    @staticmethod
-    def _get_time_of_day_period(dt: datetime) -> str:
-        """Categorize time into periods for pattern detection."""
-        hour = dt.hour
-        if 6 <= hour < 9:
-            return "morning_rush"
-        elif 9 <= hour < 12:
-            return "late_morning"
-        elif 12 <= hour < 14:
-            return "lunch"
-        elif 14 <= hour < 17:
-            return "afternoon"
-        elif 17 <= hour < 20:
-            return "evening_rush"
-        elif 20 <= hour < 23:
-            return "evening"
-        else:
-            return "night"
-    
-    @staticmethod
-    def _get_time_bucket(dt: datetime, bucket_minutes: int = 30) -> str:
-        """Get a time bucket (e.g., "08:30", "09:00") for grouping similar times across days."""
-        bucket_hour = dt.hour
-        bucket_minute = (dt.minute // bucket_minutes) * bucket_minutes
-        return f"{bucket_hour:02d}:{bucket_minute:02d}"
-    
-    def _group_by_time_periods(self) -> Dict[str, List[int]]:
-        """Group measurements by time-of-day periods."""
-        periods = defaultdict(list)
-        for ts, duration in zip(self.timestamps, self.durations):
-            period = self._get_time_of_day_period(ts)
-            periods[period].append(duration)
-        return dict(periods)
-    
-    def _detect_daily_patterns(self) -> Dict[str, Dict]:
+    def _find_base_cycle(self) -> Tuple[Optional[int], Optional[int]]:
         """
-        Detect daily repeating patterns by grouping measurements from similar times across different days.
+        Find the base cycle by looking for the smallest red gap between green lights.
+        
+        The assumption is that the smallest red gap represents the basic pattern
+        (green -> red -> green), which repeats throughout the day.
         
         Returns:
-            Dictionary with time buckets as keys and pattern info as values
+            Tuple of (cycle_time_ms, red_duration_ms) or (None, None) if not enough data
         """
-        # Group measurements by time bucket (30-minute intervals)
-        time_buckets = defaultdict(lambda: {"durations": [], "timestamps": [], "cycle_times": []})
+        if len(self.timestamps) < 2:
+            return None, None
         
-        for ts, duration in zip(self.timestamps, self.durations):
-            bucket = self._get_time_bucket(ts, bucket_minutes=30)
-            time_buckets[bucket]["durations"].append(duration)
-            time_buckets[bucket]["timestamps"].append(ts)
+        # Sort by timestamp to ensure chronological order
+        sorted_data = sorted(zip(self.timestamps, self.durations))
         
-        # Calculate cycle times within each bucket (time between occurrences on different days)
-        daily_patterns = {}
-        for bucket, data in time_buckets.items():
-            if len(data["timestamps"]) >= 2:
-                # Sort timestamps
-                sorted_ts = sorted(data["timestamps"])
-                
-                # Calculate time differences (looking for ~24-hour cycles)
-                cycle_times = []
-                for i in range(len(sorted_ts) - 1):
-                    diff_hours = (sorted_ts[i + 1] - sorted_ts[i]).total_seconds() / 3600
-                    # If measurements are roughly 24 hours apart (20-28 hours to account for variation)
-                    if 20 <= diff_hours <= 28:
-                        cycle_times.append(diff_hours * 3600 * 1000)  # Convert to ms
-                
-                avg_duration = int(mean(data["durations"])) if data["durations"] else None
-                avg_cycle = int(mean(cycle_times)) if cycle_times else None
-                
-                daily_patterns[bucket] = {
-                    "avg_duration": avg_duration,
-                    "avg_cycle": avg_cycle,
-                    "sample_count": len(data["timestamps"]),
-                    "last_occurrence": max(data["timestamps"]),
-                    "durations": data["durations"],
-                    "cycle_times": cycle_times
-                }
-        
-        return daily_patterns
-    
-    def _calculate_average_cycle(self, daily_patterns: Dict) -> Optional[int]:
-        """
-        Calculate average cycle time, preferring daily pattern data if available.
-        Falls back to consecutive measurements if daily patterns aren't detected.
-        """
-        # First, try to use daily patterns (24-hour cycles)
-        all_daily_cycles = []
-        for pattern in daily_patterns.values():
-            if pattern.get("avg_cycle"):
-                all_daily_cycles.append(pattern["avg_cycle"])
-        
-        if all_daily_cycles:
-            return int(mean(all_daily_cycles))
-        
-        # Fallback: calculate from consecutive measurements (short-term cycles)
-        if len(self.timestamps) >= 2:
-            cycle_times = []
-            for i in range(len(self.timestamps) - 1):
-                cycle_ms = int((self.timestamps[i + 1] - self.timestamps[i]).total_seconds() * 1000)
-                # Only consider cycles less than 30 minutes (typical traffic light cycle)
-                if cycle_ms < 30 * 60 * 1000:
-                    cycle_times.append(cycle_ms)
+        # Calculate red gaps between consecutive green lights
+        red_gaps = []
+        for i in range(len(sorted_data) - 1):
+            green_start_1, green_duration_1 = sorted_data[i]
+            green_start_2, green_duration_2 = sorted_data[i + 1]
             
-            if cycle_times:
-                return int(mean(cycle_times))
+            # Calculate when first green light ends
+            green_end_1 = green_start_1 + timedelta(milliseconds=green_duration_1)
+            
+            # Calculate red duration (gap between green lights)
+            red_duration = (green_start_2 - green_end_1).total_seconds() * 1000
+            
+            # Only consider positive red durations (ignore overlapping or same-day multiples)
+            # Also filter out very large gaps (> 2 hours) as they're likely different days
+            if 0 < red_duration < 2 * 60 * 60 * 1000:
+                cycle_time = (green_start_2 - green_start_1).total_seconds() * 1000
+                red_gaps.append({
+                    'red_duration': red_duration,
+                    'cycle_time': cycle_time,
+                    'green_duration': green_duration_1
+                })
         
-        return None
+        if not red_gaps:
+            return None, None
+        
+        # Find the smallest red gap - this is our base pattern
+        smallest_gap = min(red_gaps, key=lambda x: x['red_duration'])
+        
+        return int(smallest_gap['cycle_time']), int(smallest_gap['red_duration'])
     
-    def _determine_regularity(self, time_periods: Dict, daily_patterns: Dict) -> Optional[str]:
+    def _determine_regularity(self) -> Optional[str]:
         """
-        Determine schedule regularity based on consistency across days and time periods.
+        Determine schedule regularity based on variance in durations.
         
         Returns:
             "regular", "somewhat_regular", "irregular", or None if insufficient data
@@ -196,103 +133,164 @@ class PatternDetector:
         if self.total_captures < 3:
             return None
         
-        # Check if we have daily repeating patterns
-        strong_daily_patterns = sum(1 for p in daily_patterns.values() if p["sample_count"] >= 2)
-        
-        if strong_daily_patterns >= 2:
-            # Check consistency within daily patterns
-            pattern_variances = []
-            for pattern in daily_patterns.values():
-                if len(pattern["durations"]) >= 2:
-                    variance = stdev(pattern["durations"]) / mean(pattern["durations"])
-                    pattern_variances.append(variance)
-            
-            if pattern_variances:
-                avg_variance = mean(pattern_variances)
-                if avg_variance < 0.1:  # Less than 10% variation
-                    return "regular"
-                elif avg_variance < 0.2:
-                    return "somewhat_regular"
-                else:
-                    return "irregular"
-        
-        # Fallback: check overall variance
+        # Check variance in green light durations
         std_dev = stdev(self.durations)
         avg_duration = mean(self.durations)
         variance = std_dev / avg_duration
         
-        if variance < 0.1:
+        if variance < 0.1:  # Less than 10% variation
             return "regular"
-        elif variance < 0.2:
+        elif variance < 0.2:  # Less than 20% variation
             return "somewhat_regular"
         else:
             return "irregular"
     
-    def _predict_next_green_phase(self, daily_patterns: Dict, avg_duration: int, 
-                                   avg_cycle_ms: Optional[int]) -> Tuple[Optional[str], Optional[str]]:
+    def _predict_next_green_phase(self, base_cycle_ms: Optional[int], 
+                                   avg_duration: int) -> Tuple[Optional[str], Optional[str]]:
         """
-        Predict the next green phase using daily patterns.
-        Looks for patterns at the current time of day based on historical data.
+        Predict the next green phase based on the base cycle.
+        
+        Args:
+            base_cycle_ms: The base cycle time in milliseconds
+            avg_duration: Average green light duration
+            
+        Returns:
+            Tuple of (next_green_start_iso, next_green_end_iso)
         """
-        if not self.timestamps:
+        if not self.timestamps or not base_cycle_ms:
             return None, None
         
-        now = datetime.now(self.timestamps[0].tzinfo)
-        current_bucket = self._get_time_bucket(now, bucket_minutes=30)
+        # Use the most recent measurement as reference
+        last_green_start = max(self.timestamps)
         
-        # Strategy 1: Use daily pattern for current time bucket
-        if current_bucket in daily_patterns:
-            pattern = daily_patterns[current_bucket]
-            last_occurrence = pattern["last_occurrence"]
+        # Handle timezone-aware timestamps
+        if last_green_start.tzinfo is not None:
+            now = datetime.now(last_green_start.tzinfo)
+        else:
+            now = datetime.now()
+        
+        # Project forward using the base cycle
+        next_start_dt = last_green_start
+        while next_start_dt <= now:
+            next_start_dt = next_start_dt + timedelta(milliseconds=base_cycle_ms)
+        
+        next_end_dt = next_start_dt + timedelta(milliseconds=avg_duration)
+        
+        return next_start_dt.isoformat(), next_end_dt.isoformat()
+    
+    def get_daily_timeline(self, reference_date: Optional[datetime] = None) -> List[Dict]:
+        """
+        Generate a predicted timeline for a full day based on the detected pattern.
+        
+        Args:
+            reference_date: The date to generate the timeline for (defaults to today)
             
-            # Check if last occurrence was yesterday or earlier
-            hours_since = (now - last_occurrence).total_seconds() / 3600
+        Returns:
+            List of dicts with 'start_time', 'end_time', 'state' (green/red)
+        """
+        if not self.timestamps or len(self.timestamps) < 2:
+            return []
+        
+        if reference_date is None:
+            reference_date = datetime.now().date()
+        
+        # Get the base cycle
+        base_cycle_ms, red_duration_ms = self._find_base_cycle()
+        if not base_cycle_ms:
+            return []
+        
+        avg_duration = int(mean(self.durations))
+        
+        # Find a measurement to use as reference (prefer one from same day of week if possible)
+        # For simplicity, use the first measurement and align it by time of day
+        reference_measurement = self.timestamps[0]
+        reference_time = reference_measurement.time()
+        
+        # Start generating timeline from midnight
+        timeline = []
+        current_time = datetime.combine(reference_date, time(0, 0, 0))
+        end_of_day = current_time + timedelta(days=1)
+        
+        # Find the first green light of the day by projecting backwards/forwards from reference
+        first_green = datetime.combine(reference_date, reference_time)
+        
+        # Project backwards to find when the pattern starts (could be before reference time)
+        while first_green > current_time:
+            first_green = first_green - timedelta(milliseconds=base_cycle_ms)
+        
+        # Now project forward through the entire day
+        current_green_start = first_green
+        while current_green_start < end_of_day:
+            green_end = current_green_start + timedelta(milliseconds=avg_duration)
+            red_end = current_green_start + timedelta(milliseconds=base_cycle_ms)
             
-            if hours_since >= 20:  # More than 20 hours ago
-                # Predict based on 24-hour cycle
-                predicted_next = last_occurrence + timedelta(days=1)
-                # Adjust to today's date but keep the time
-                predicted_next = predicted_next.replace(
-                    year=now.year, month=now.month, day=now.day
-                )
+            # Only add if within the day
+            if current_green_start >= current_time and current_green_start < end_of_day:
+                # Add green phase
+                timeline.append({
+                    'start_time': current_green_start.isoformat(),
+                    'end_time': min(green_end, end_of_day).isoformat(),
+                    'state': 'green'
+                })
                 
-                next_green_start = predicted_next.isoformat()
-                next_green_end = (predicted_next + timedelta(milliseconds=pattern["avg_duration"])).isoformat()
-                return next_green_start, next_green_end
-        
-        # Strategy 2: Look for upcoming patterns within the next few hours
-        upcoming_patterns = []
-        for bucket, pattern in daily_patterns.items():
-            bucket_hour, bucket_minute = map(int, bucket.split(':'))
-            bucket_time = now.replace(hour=bucket_hour, minute=bucket_minute, second=0, microsecond=0)
+                # Add red phase
+                if green_end < end_of_day:
+                    timeline.append({
+                        'start_time': green_end.isoformat(),
+                        'end_time': min(red_end, end_of_day).isoformat(),
+                        'state': 'red'
+                    })
             
-            # If this time is in the future today
-            if bucket_time > now:
-                upcoming_patterns.append((bucket_time, pattern))
-            # Or early tomorrow
-            elif bucket_time <= now:
-                tomorrow_time = bucket_time + timedelta(days=1)
-                upcoming_patterns.append((tomorrow_time, pattern))
+            current_green_start = red_end
         
-        if upcoming_patterns:
-            # Sort by time and pick the nearest
-            upcoming_patterns.sort(key=lambda x: x[0])
-            next_time, pattern = upcoming_patterns[0]
+        return timeline
+    
+    def validate_pattern(self, tolerance_ms: int = 5000) -> Dict:
+        """
+        Validate the detected pattern against all measurements.
+        
+        Checks if the projected pattern aligns with actual measurements within tolerance.
+        
+        Args:
+            tolerance_ms: Time tolerance in milliseconds
             
-            next_green_start = next_time.isoformat()
-            next_green_end = (next_time + timedelta(milliseconds=pattern["avg_duration"])).isoformat()
-            return next_green_start, next_green_end
+        Returns:
+            Dictionary with validation results
+        """
+        base_cycle_ms, _ = self._find_base_cycle()
+        if not base_cycle_ms or len(self.timestamps) < 2:
+            return {
+                'is_valid': False,
+                'matches': 0,
+                'total': len(self.timestamps),
+                'match_rate': 0.0
+            }
         
-        # Strategy 3: Fallback to simple cycle-based prediction (original logic)
-        if avg_cycle_ms and len(self.timestamps) > 0:
-            last_green_start = self.timestamps[-1]
+        # Use first measurement as anchor point
+        anchor = self.timestamps[0]
+        anchor_time = anchor.time()
+        
+        matches = 0
+        for ts in self.timestamps:
+            # Check if this timestamp aligns with the pattern
+            # Calculate time difference from anchor on the same day
+            same_day_anchor = datetime.combine(ts.date(), anchor_time)
             
-            # If it's a short cycle (< 30 min), predict based on last measurement
-            if avg_cycle_ms < 30 * 60 * 1000:
-                next_start_dt = last_green_start + timedelta(milliseconds=avg_cycle_ms)
-                next_green_start = next_start_dt.isoformat()
-                next_end_dt = next_start_dt + timedelta(milliseconds=avg_duration)
-                next_green_end = next_end_dt.isoformat()
-                return next_green_start, next_green_end
+            # Find the nearest predicted green light
+            time_diff = (ts - same_day_anchor).total_seconds() * 1000
+            
+            # Check if it's close to any multiple of the cycle
+            remainder = time_diff % base_cycle_ms
+            
+            # Check both forward and backward alignment
+            if remainder <= tolerance_ms or remainder >= (base_cycle_ms - tolerance_ms):
+                matches += 1
         
-        return None, None
+        match_rate = matches / len(self.timestamps) if self.timestamps else 0.0
+        
+        return {
+            'is_valid': match_rate >= 0.7,  # At least 70% match
+            'matches': matches,
+            'total': len(self.timestamps),
+            'match_rate': match_rate
+        }

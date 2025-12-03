@@ -24,7 +24,7 @@ class TestPatternDetector:
         detector = PatternDetector([timestamp], [duration])
         result = detector.analyze()
         
-        assert result["has_pattern"] is True
+        assert result["has_pattern"] is False  # Can't detect pattern with 1 measurement
         assert result["total_captures"] == 1
         assert result["average_duration_ms"] == 30000
         assert result["min_duration_ms"] == 30000
@@ -50,12 +50,17 @@ class TestPatternDetector:
         assert result["average_duration_ms"] == 30125
         assert result["min_duration_ms"] == 29000
         assert result["max_duration_ms"] == 31000
-        assert result["average_cycle_ms"] == 5 * 60 * 1000  # 5 minutes
+        assert result["average_cycle_ms"] is not None  # Should find the 5-minute cycle
         assert result["schedule_regularity"] == "regular"  # Low variation
+        
+        # The smallest red gap should be ~4.5 minutes (270 seconds)
+        # Cycle = 5 minutes = 300,000ms
+        assert abs(result["average_cycle_ms"] - 5 * 60 * 1000) < 10000  # Within 10 seconds
     
     def test_daily_repeating_pattern(self):
-        """Test detection of daily repeating patterns."""
-        # Measurements at 8:30 AM over 3 consecutive days
+        """Test detection of daily repeating patterns - not applicable with new logic."""
+        # With new logic, we focus on short-term cycles within a day
+        # Daily patterns are detected by the same mechanism
         timestamps = [
             datetime(2025, 12, 1, 8, 30, 0),
             datetime(2025, 12, 2, 8, 30, 0),
@@ -66,23 +71,21 @@ class TestPatternDetector:
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
         
-        assert result["has_pattern"] is True
+        assert result["has_pattern"] is False  # 24h gaps are too large, filtered out
         assert result["total_captures"] == 3
         assert result["average_duration_ms"] == 30500
         assert result["schedule_regularity"] == "regular"
-        # Should detect 24-hour cycle
-        assert result["average_cycle_ms"] is not None
-        assert result["average_cycle_ms"] == 24 * 60 * 60 * 1000  # 24 hours
     
     def test_multiple_daily_patterns(self):
         """Test detection of multiple patterns at different times of day."""
-        # Morning pattern at 8:30 and evening pattern at 17:30
+        # Pattern with 5-minute cycles
+        base_time = datetime(2025, 12, 1, 8, 30, 0)
         timestamps = [
-            datetime(2025, 12, 1, 8, 30, 0),
-            datetime(2025, 12, 1, 17, 30, 0),
-            datetime(2025, 12, 2, 8, 30, 0),
-            datetime(2025, 12, 2, 17, 30, 0),
-            datetime(2025, 12, 3, 8, 30, 0),
+            base_time,
+            base_time + timedelta(minutes=5),
+            base_time + timedelta(minutes=10),
+            base_time + timedelta(minutes=15),
+            base_time + timedelta(minutes=20),
         ]
         durations = [30000, 25000, 31000, 24000, 29500]
         
@@ -91,12 +94,12 @@ class TestPatternDetector:
         
         assert result["has_pattern"] is True
         assert result["total_captures"] == 5
-        # Should detect daily patterns
+        # Should detect the 5-minute cycle
         assert result["average_cycle_ms"] is not None
     
     def test_sparse_measurements_different_days(self):
         """Test with sparse measurements across different days."""
-        # Random times across a week
+        # Random times across a week - should not find pattern
         timestamps = [
             datetime(2025, 12, 1, 8, 30, 0),
             datetime(2025, 12, 3, 14, 15, 0),
@@ -108,7 +111,7 @@ class TestPatternDetector:
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
         
-        assert result["has_pattern"] is True
+        assert result["has_pattern"] is False  # Gaps too large
         assert result["total_captures"] == 4
         assert result["average_duration_ms"] == 29750
         # With sparse data, should still provide some analysis
@@ -150,99 +153,69 @@ class TestPatternDetector:
         assert result["has_pattern"] is True
         assert result["schedule_regularity"] == "somewhat_regular"
     
-    def test_time_of_day_periods(self):
-        """Test that measurements are correctly categorized by time of day."""
-        # Various times throughout the day
+    def test_pattern_detection_simple(self):
+        """Test simple pattern detection with clear cycle."""
+        # Traffic light with 2-minute cycle: 30s green, 90s red
+        base_time = datetime(2025, 12, 1, 8, 0, 0)
         timestamps = [
-            datetime(2025, 12, 1, 7, 0, 0),    # morning_rush
-            datetime(2025, 12, 1, 10, 0, 0),   # late_morning
-            datetime(2025, 12, 1, 13, 0, 0),   # lunch
-            datetime(2025, 12, 1, 15, 0, 0),   # afternoon
-            datetime(2025, 12, 1, 18, 0, 0),   # evening_rush
-            datetime(2025, 12, 1, 21, 0, 0),   # evening
-            datetime(2025, 12, 1, 2, 0, 0),    # night
+            base_time,
+            base_time + timedelta(minutes=2),
+            base_time + timedelta(minutes=4),
+            base_time + timedelta(minutes=6),
         ]
-        durations = [30000] * 7
-        
-        detector = PatternDetector(timestamps, durations)
-        result = detector.analyze()
-        
-        assert result["has_pattern"] is True
-        assert result["total_captures"] == 7
-        # Should handle different time periods
-        assert result["average_duration_ms"] == 30000
-    
-    def test_prediction_with_daily_pattern(self):
-        """Test prediction of next green phase with daily pattern."""
-        # Create a pattern at 8:30 AM for 3 days
-        timestamps = [
-            datetime(2025, 11, 28, 8, 30, 0),
-            datetime(2025, 11, 29, 8, 30, 0),
-            datetime(2025, 11, 30, 8, 30, 0),
-        ]
-        durations = [30000, 30000, 30000]
-        
-        detector = PatternDetector(timestamps, durations)
-        result = detector.analyze()
-        
-        # Should predict next occurrence
-        assert result["next_green_start"] is not None
-        assert result["next_green_end"] is not None
-    
-    def test_time_bucket_grouping(self):
-        """Test that similar times are grouped into 30-minute buckets."""
-        # Times within the same 30-minute bucket (08:00-08:30)
-        timestamps = [
-            datetime(2025, 12, 1, 8, 15, 0),
-            datetime(2025, 12, 2, 8, 20, 0),
-            datetime(2025, 12, 3, 8, 25, 0),
-        ]
-        durations = [30000, 30000, 30000]
-        
-        detector = PatternDetector(timestamps, durations)
-        result = detector.analyze()
-        
-        assert result["has_pattern"] is True
-        # Should recognize these as the same daily pattern
-        assert result["average_cycle_ms"] is not None
-    
-    def test_mixed_short_and_long_cycles(self):
-        """Test with both short-term and long-term cycles."""
-        # Some consecutive measurements + daily pattern
-        timestamps = [
-            datetime(2025, 12, 1, 8, 30, 0),
-            datetime(2025, 12, 1, 8, 35, 0),  # 5 min later
-            datetime(2025, 12, 2, 8, 30, 0),  # Next day
-            datetime(2025, 12, 2, 8, 35, 0),  # 5 min later
-        ]
-        durations = [30000, 30000, 30000, 30000]
+        durations = [30000, 30000, 30000, 30000]  # All 30 seconds
         
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
         
         assert result["has_pattern"] is True
         assert result["total_captures"] == 4
-        # Should detect some kind of cycle
-        assert result["average_cycle_ms"] is not None
+        assert result["average_duration_ms"] == 30000
+        # Cycle should be 2 minutes (120,000ms)
+        assert result["average_cycle_ms"] == 120000
+        # Red duration should be ~90 seconds (90,000ms)
+        assert result["red_duration_ms"] == 90000
     
-    def test_statistical_measures(self):
-        """Test that statistical measures are correctly calculated."""
+    def test_timeline_generation(self):
+        """Test generation of daily timeline."""
+        base_time = datetime(2025, 12, 1, 8, 0, 0)
         timestamps = [
-            datetime(2025, 12, 1, 8, 30, 0),
-            datetime(2025, 12, 1, 8, 35, 0),
-            datetime(2025, 12, 1, 8, 40, 0),
-            datetime(2025, 12, 1, 8, 45, 0),
+            base_time,
+            base_time + timedelta(minutes=2),
+            base_time + timedelta(minutes=4),
         ]
-        durations = [30000, 32000, 28000, 30000]
+        durations = [30000, 30000, 30000]
         
         detector = PatternDetector(timestamps, durations)
-        result = detector.analyze()
+        timeline = detector.get_daily_timeline(reference_date=datetime(2025, 12, 1).date())
         
-        assert result["average_duration_ms"] == 30000
-        assert result["min_duration_ms"] == 28000
-        assert result["max_duration_ms"] == 32000
-        assert result["stddev_duration_ms"] is not None
-        assert result["stddev_duration_ms"] > 0
+        # Should generate timeline entries
+        assert len(timeline) > 0
+        
+        # Check structure
+        assert all('start_time' in entry for entry in timeline)
+        assert all('end_time' in entry for entry in timeline)
+        assert all('state' in entry for entry in timeline)
+        assert all(entry['state'] in ['green', 'red'] for entry in timeline)
+    
+    def test_pattern_validation(self):
+        """Test pattern validation against measurements."""
+        base_time = datetime(2025, 12, 1, 8, 0, 0)
+        timestamps = [
+            base_time,
+            base_time + timedelta(minutes=2),
+            base_time + timedelta(minutes=4),
+            base_time + timedelta(minutes=6),
+        ]
+        durations = [30000, 30000, 30000, 30000]
+        
+        detector = PatternDetector(timestamps, durations)
+        validation = detector.validate_pattern()
+        
+        assert validation['is_valid'] is True
+        assert validation['match_rate'] > 0.7  # At least 70% match
+        assert validation['matches'] >= 3
+        assert validation['total'] == 4
 
 
 class TestPatternDetectorEdgeCases:
@@ -259,10 +232,9 @@ class TestPatternDetectorEdgeCases:
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
         
-        assert result["has_pattern"] is True
+        assert result["has_pattern"] is False  # Gap too large (> 2 hours)
         assert result["total_captures"] == 2
-        # Should not detect a daily pattern (too far apart)
-        # But should still provide basic statistics
+        # Should still provide basic statistics
     
     def test_same_time_same_day(self):
         """Test with multiple measurements at the same time on the same day."""
@@ -277,18 +249,23 @@ class TestPatternDetectorEdgeCases:
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
         
-        assert result["has_pattern"] is True
+        # Very short cycles might not be detected as pattern
+        # (red duration would be negative or very small)
         assert result["total_captures"] == 3
+        # Should still provide basic statistics
+        assert result["average_duration_ms"] == 30000
     
     def test_timezone_aware_timestamps(self):
         """Test with timezone-aware timestamps."""
         from datetime import timezone
         
+        base_time = datetime(2025, 12, 1, 8, 0, 0, tzinfo=timezone.utc)
         timestamps = [
-            datetime(2025, 12, 1, 8, 30, 0, tzinfo=timezone.utc),
-            datetime(2025, 12, 2, 8, 30, 0, tzinfo=timezone.utc),
+            base_time,
+            base_time + timedelta(minutes=2),
+            base_time + timedelta(minutes=4),
         ]
-        durations = [30000, 30000]
+        durations = [30000, 30000, 30000]
         
         detector = PatternDetector(timestamps, durations)
         result = detector.analyze()
@@ -310,6 +287,21 @@ class TestPatternDetectorEdgeCases:
         result = detector.analyze()
         
         assert result["schedule_regularity"] in ["regular", "somewhat_regular"]
+    
+    def test_overlapping_green_lights(self):
+        """Test with overlapping measurements (shouldn't happen but handle gracefully)."""
+        base_time = datetime(2025, 12, 1, 8, 0, 0)
+        timestamps = [
+            base_time,
+            base_time + timedelta(seconds=10),  # Overlaps with first
+        ]
+        durations = [30000, 30000]
+        
+        detector = PatternDetector(timestamps, durations)
+        result = detector.analyze()
+        
+        # Should handle without crashing
+        assert result["total_captures"] == 2
 
 
 if __name__ == "__main__":

@@ -54,6 +54,34 @@
           </div>
         </div>
 
+        <div v-if="timeline && timeline.has_pattern" class="timeline-section">
+          <h3>🕐 Predicted Pattern Timeline</h3>
+          <div class="timeline-info">
+            <p v-if="timeline.validation" class="validation-info">
+              Pattern confidence: {{ (timeline.validation.match_rate * 100).toFixed(0) }}%
+              ({{ timeline.validation.matches }}/{{ timeline.validation.total }} measurements match)
+            </p>
+          </div>
+          <div class="timeline-container">
+            <div class="timeline-hours">
+              <div v-for="hour in 24" :key="hour" class="hour-marker">
+                {{ String(hour - 1).padStart(2, '0') }}:00
+              </div>
+            </div>
+            <div class="timeline-bar">
+              <div 
+                v-for="(entry, index) in timeline.entries" 
+                :key="index"
+                :class="['timeline-entry', `state-${entry.state}`]"
+                :style="getTimelineEntryStyle(entry)"
+                :title="`${entry.state.toUpperCase()}: ${formatTimelineTime(entry.start_time)} - ${formatTimelineTime(entry.end_time)}`"
+              >
+              </div>
+              <div class="timeline-current-time" :style="getCurrentTimePosition()"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="metadata-section">
           <h3>Metadata</h3>
           
@@ -128,6 +156,24 @@ interface SchedulePattern {
   next_green_start: string
 }
 
+interface TimelineEntry {
+  start_time: string
+  end_time: string
+  state: 'green' | 'red'
+}
+
+interface DailyTimeline {
+  date: string
+  has_pattern: boolean
+  entries: TimelineEntry[]
+  validation?: {
+    is_valid: boolean
+    matches: number
+    total: number
+    match_rate: number
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 const instance = getCurrentInstance()
@@ -135,6 +181,7 @@ const apiClient = instance?.appContext.config.globalProperties.$apiClient as Api
 
 const trafficLight = ref<TrafficLight | null>(null)
 const pattern = ref<SchedulePattern | null>(null)
+const timeline = ref<DailyTimeline | null>(null)
 let countdownTimer: number | null = null
 const currentTime = ref(new Date())
 
@@ -153,6 +200,15 @@ const fetchSchedulePattern = async () => {
   const id = route.params.id
   try {
     pattern.value = await apiClient.get<SchedulePattern>(`/api/traffic-lights/${id}/pattern`)
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+const fetchTimeline = async () => {
+  const id = route.params.id
+  try {
+    timeline.value = await apiClient.get<DailyTimeline>(`/api/traffic-lights/${id}/pattern/timeline`)
   } catch (err) {
     console.error(err)
   }
@@ -291,9 +347,48 @@ const startCountdownTimer = () => {
   }, 100)
 }
 
+const getTimelineEntryStyle = (entry: TimelineEntry) => {
+  const startTime = new Date(entry.start_time)
+  const endTime = new Date(entry.end_time)
+  
+  // Calculate position as percentage of the day
+  const startMs = startTime.getHours() * 3600000 + startTime.getMinutes() * 60000 + startTime.getSeconds() * 1000
+  const endMs = endTime.getHours() * 3600000 + endTime.getMinutes() * 60000 + endTime.getSeconds() * 1000
+  
+  const dayMs = 24 * 3600000
+  const leftPercent = (startMs / dayMs) * 100
+  const widthPercent = ((endMs - startMs) / dayMs) * 100
+  
+  return {
+    left: `${leftPercent}%`,
+    width: `${widthPercent}%`
+  }
+}
+
+const getCurrentTimePosition = () => {
+  const now = currentTime.value
+  const ms = now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000
+  const dayMs = 24 * 3600000
+  const percent = (ms / dayMs) * 100
+  
+  return {
+    left: `${percent}%`
+  }
+}
+
+const formatTimelineTime = (isoString: string): string => {
+  try {
+    const date = new Date(isoString)
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return isoString
+  }
+}
+
 onMounted(() => {
   fetchTrafficLight()
   fetchSchedulePattern()
+  fetchTimeline()
   startCountdownTimer()
 })
 
@@ -418,6 +513,106 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   text-align: center;
   color: #888;
+}
+
+.timeline-section {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 2px solid #444;
+}
+
+.timeline-section h3 {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: #e0e0e0;
+}
+
+.timeline-info {
+  margin-bottom: 1rem;
+}
+
+.validation-info {
+  font-size: 0.9rem;
+  color: #888;
+  text-align: center;
+}
+
+.timeline-container {
+  background: #1f1f1f;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.timeline-hours {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.hour-marker {
+  flex: 1;
+  text-align: center;
+  min-width: 40px;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 40px;
+  background: linear-gradient(to right, 
+    rgba(239, 68, 68, 0.3) 0%, 
+    rgba(239, 68, 68, 0.3) 100%);
+  border-radius: 6px;
+  overflow: visible;
+}
+
+.timeline-entry {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  transition: all 0.3s;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.timeline-entry.state-green {
+  background: rgba(34, 197, 94, 0.8);
+  border: 1px solid #22c55e;
+}
+
+.timeline-entry.state-red {
+  background: rgba(239, 68, 68, 0.4);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+}
+
+.timeline-entry:hover {
+  transform: scaleY(1.1);
+  z-index: 10;
+}
+
+.timeline-current-time {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  background: #fbbf24;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.timeline-current-time::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  background: #fbbf24;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.8);
 }
 
 .prediction-section {

@@ -1,12 +1,12 @@
 """Schedule endpoints including pattern detection."""
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List
 from datetime import datetime
 
-from app.models import Schedule, ScheduleCreate, SchedulePattern
+from app.models import Schedule, ScheduleCreate, SchedulePattern, DailyTimeline, TimelineEntry
 from app.database import get_connection, get_next_id
 from app.auth import get_current_user
 from app.services import PatternDetector
@@ -162,6 +162,77 @@ def get_schedule_pattern(traffic_light_id: str, _: Annotated[dict, Depends(get_c
         pattern_data["last_capture"] = last_capture
         
         return SchedulePattern(**pattern_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/traffic-lights/{traffic_light_id}/pattern/timeline", response_model=DailyTimeline)
+def get_pattern_timeline(
+    traffic_light_id: str, 
+    _: Annotated[dict, Depends(get_current_user)],
+    date: Optional[str] = Query(None, description="Date for timeline (YYYY-MM-DD), defaults to today")
+):
+    """Get predicted pattern timeline for a full day"""
+    try:
+        conn = get_connection()
+        
+        # Verify traffic light exists
+        existing = conn.execute(
+            "SELECT * FROM traffic_lights WHERE id = ?",
+            [traffic_light_id]
+        ).fetchall()
+        
+        if not existing:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Traffic light not found")
+        
+        # Get all schedules for this traffic light
+        result = conn.execute(
+            "SELECT duration_ms, green_start FROM schedules WHERE traffic_light_id = ? ORDER BY green_start ASC",
+            [traffic_light_id]
+        ).fetchall()
+        
+        conn.close()
+        
+        if not result or len(result) < 2:
+            # Parse date
+            if date:
+                reference_date = datetime.fromisoformat(date).date()
+            else:
+                reference_date = datetime.now().date()
+            
+            return DailyTimeline(
+                date=reference_date.isoformat(),
+                has_pattern=False,
+                entries=[]
+            )
+        
+        # Extract data
+        durations = [row[0] for row in result]
+        green_starts = [datetime.fromisoformat(str(row[1]).replace('Z', '+00:00')) for row in result]
+        
+        # Parse requested date
+        if date:
+            reference_date = datetime.fromisoformat(date).date()
+        else:
+            reference_date = datetime.now().date()
+        
+        # Use PatternDetector to generate timeline
+        detector = PatternDetector(green_starts, durations)
+        timeline_data = detector.get_daily_timeline(reference_date=reference_date)
+        validation = detector.validate_pattern()
+        
+        # Convert to response model
+        entries = [TimelineEntry(**entry) for entry in timeline_data]
+        
+        return DailyTimeline(
+            date=reference_date.isoformat(),
+            has_pattern=len(entries) > 0,
+            entries=entries,
+            validation=validation
+        )
     except HTTPException:
         raise
     except Exception as e:
