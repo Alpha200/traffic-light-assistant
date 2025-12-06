@@ -178,12 +178,13 @@ class PatternDetector:
         
         return next_start_dt.isoformat(), next_end_dt.isoformat()
     
-    def get_daily_timeline(self, reference_date: Optional[datetime] = None) -> List[Dict]:
+    def get_daily_timeline(self, reference_date: Optional[datetime] = None, hours: Optional[int] = None) -> List[Dict]:
         """
-        Generate a predicted timeline for a full day based on the detected pattern.
+        Generate a predicted timeline based on the detected pattern.
         
         Args:
             reference_date: The date to generate the timeline for (defaults to today)
+            hours: Number of hours to generate timeline for (defaults to 24 for full day)
             
         Returns:
             List of dicts with 'start_time', 'end_time', 'state' (green/red)
@@ -209,7 +210,16 @@ class PatternDetector:
         # Start generating timeline from midnight
         timeline = []
         current_time = datetime.combine(reference_date, time(0, 0, 0))
-        end_of_day = current_time + timedelta(days=1)
+        
+        # If hours is specified, limit the end time to current time + hours
+        # Otherwise, generate for the full day
+        if hours is not None:
+            now = datetime.now()
+            end_time = now + timedelta(hours=hours)
+            # Use the later of midnight or now as the start
+            current_time = max(current_time, now)
+        else:
+            end_time = current_time + timedelta(days=1)
         
         # Find the first green light of the day by projecting backwards/forwards from reference
         first_green = datetime.combine(reference_date, reference_time)
@@ -218,26 +228,26 @@ class PatternDetector:
         while first_green > current_time:
             first_green = first_green - timedelta(milliseconds=base_cycle_ms)
         
-        # Now project forward through the entire day
+        # Now project forward through the specified time period
         current_green_start = first_green
-        while current_green_start < end_of_day:
+        while current_green_start < end_time:
             green_end = current_green_start + timedelta(milliseconds=avg_duration)
             red_end = current_green_start + timedelta(milliseconds=base_cycle_ms)
             
-            # Only add if within the day
-            if current_green_start >= current_time and current_green_start < end_of_day:
+            # Only add if within the specified time range
+            if current_green_start >= current_time and current_green_start < end_time:
                 # Add green phase
                 timeline.append({
                     'start_time': current_green_start.isoformat(),
-                    'end_time': min(green_end, end_of_day).isoformat(),
+                    'end_time': min(green_end, end_time).isoformat(),
                     'state': 'green'
                 })
                 
                 # Add red phase
-                if green_end < end_of_day:
+                if green_end < end_time:
                     timeline.append({
                         'start_time': green_end.isoformat(),
-                        'end_time': min(red_end, end_of_day).isoformat(),
+                        'end_time': min(red_end, end_time).isoformat(),
                         'state': 'red'
                     })
             

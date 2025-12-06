@@ -172,9 +172,10 @@ def get_schedule_pattern(traffic_light_id: str, _: Annotated[dict, Depends(get_c
 def get_pattern_timeline(
     traffic_light_id: str, 
     _: Annotated[dict, Depends(get_current_user)],
-    date: Optional[str] = Query(None, description="Date for timeline (YYYY-MM-DD), defaults to today")
+    date: Optional[str] = Query(None, description="Date for timeline (YYYY-MM-DD), defaults to today"),
+    hours: Optional[int] = Query(None, description="Number of hours to generate timeline for (defaults to 24 for full day)")
 ):
-    """Get predicted pattern timeline for a full day"""
+    """Get predicted pattern timeline for a specified time period"""
     try:
         conn = get_connection()
         
@@ -221,7 +222,7 @@ def get_pattern_timeline(
         
         # Use PatternDetector to generate timeline
         detector = PatternDetector(green_starts, durations)
-        timeline_data = detector.get_daily_timeline(reference_date=reference_date)
+        timeline_data = detector.get_daily_timeline(reference_date=reference_date, hours=hours)
         validation = detector.validate_pattern()
         
         # Convert to response model

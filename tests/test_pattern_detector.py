@@ -198,6 +198,31 @@ class TestPatternDetector:
         assert all('state' in entry for entry in timeline)
         assert all(entry['state'] in ['green', 'red'] for entry in timeline)
     
+    def test_timeline_generation_limited_hours(self):
+        """Test generation of timeline limited to specific hours."""
+        base_time = datetime(2025, 12, 1, 8, 0, 0)
+        timestamps = [
+            base_time,
+            base_time + timedelta(minutes=2),
+            base_time + timedelta(minutes=4),
+        ]
+        durations = [30000, 30000, 30000]
+        
+        detector = PatternDetector(timestamps, durations)
+        # Generate timeline for only 1 hour
+        timeline_1h = detector.get_daily_timeline(reference_date=datetime(2025, 12, 1).date(), hours=1)
+        # Generate timeline for full day (24 hours)
+        timeline_24h = detector.get_daily_timeline(reference_date=datetime(2025, 12, 1).date(), hours=24)
+        
+        # 1-hour timeline should have fewer entries than 24-hour timeline
+        assert len(timeline_1h) < len(timeline_24h)
+        assert len(timeline_1h) > 0
+        
+        # Check that all entries are valid
+        assert all('start_time' in entry for entry in timeline_1h)
+        assert all('end_time' in entry for entry in timeline_1h)
+        assert all('state' in entry for entry in timeline_1h)
+    
     def test_pattern_validation(self):
         """Test pattern validation against measurements."""
         base_time = datetime(2025, 12, 1, 8, 0, 0)

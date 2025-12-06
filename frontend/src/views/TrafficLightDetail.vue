@@ -90,7 +90,7 @@
         <v-card v-if="timeline && timeline.has_pattern" class="mb-4">
           <v-card-title>
             <v-icon icon="mdi-clock-outline" class="mr-2"></v-icon>
-            Predicted Pattern Timeline
+            Next Hour Pattern
           </v-card-title>
           <v-card-text>
             <div v-if="timeline.validation" class="text-center text-caption mb-4">
@@ -99,8 +99,8 @@
             </div>
             <v-sheet color="surface-variant" class="pa-4 rounded">
               <div class="timeline-hours">
-                <div v-for="hour in 24" :key="hour" class="hour-marker text-caption">
-                  {{ String(hour - 1).padStart(2, '0') }}:00
+                <div v-for="(marker, index) in getTimeMarkers()" :key="index" class="hour-marker text-caption">
+                  {{ marker }}
                 </div>
               </div>
               <div class="timeline-bar">
@@ -269,7 +269,8 @@ const fetchSchedulePattern = async () => {
 const fetchTimeline = async () => {
   const id = route.params.id
   try {
-    timeline.value = await apiClient.get<DailyTimeline>(`/api/traffic-lights/${id}/pattern/timeline`)
+    // Fetch only 1 hour of timeline to improve performance
+    timeline.value = await apiClient.get<DailyTimeline>(`/api/traffic-lights/${id}/pattern/timeline?hours=1`)
   } catch (err) {
     console.error(err)
   }
@@ -412,32 +413,78 @@ const startCountdownTimer = () => {
   }, 100)
 }
 
+const getTimelineRange = () => {
+  // Get the time range for the timeline based on the entries
+  if (!timeline.value || timeline.value.entries.length === 0) {
+    const now = new Date()
+    return {
+      start: now,
+      end: new Date(now.getTime() + 3600000) // 1 hour from now
+    }
+  }
+  
+  const firstEntry = timeline.value.entries[0]
+  const lastEntry = timeline.value.entries[timeline.value.entries.length - 1]
+  
+  if (!firstEntry || !lastEntry) {
+    const now = new Date()
+    return {
+      start: now,
+      end: new Date(now.getTime() + 3600000)
+    }
+  }
+  
+  return {
+    start: new Date(firstEntry.start_time),
+    end: new Date(lastEntry.end_time)
+  }
+}
+
+const getTimeMarkers = () => {
+  // Generate time markers for the timeline (every 10 minutes for 1 hour)
+  const range = getTimelineRange()
+  const markers: string[] = []
+  const current = new Date(range.start)
+  
+  // Round down to nearest 10 minutes
+  current.setMinutes(Math.floor(current.getMinutes() / 10) * 10, 0, 0)
+  
+  while (current <= range.end) {
+    markers.push(current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+    current.setMinutes(current.getMinutes() + 10)
+  }
+  
+  return markers
+}
+
 const getTimelineEntryStyle = (entry: TimelineEntry) => {
   const startTime = new Date(entry.start_time)
   const endTime = new Date(entry.end_time)
+  const range = getTimelineRange()
   
-  // Calculate position as percentage of the day
-  const startMs = startTime.getHours() * 3600000 + startTime.getMinutes() * 60000 + startTime.getSeconds() * 1000
-  const endMs = endTime.getHours() * 3600000 + endTime.getMinutes() * 60000 + endTime.getSeconds() * 1000
+  // Calculate position as percentage of the time range
+  const rangeMs = range.end.getTime() - range.start.getTime()
+  const startOffset = startTime.getTime() - range.start.getTime()
+  const endOffset = endTime.getTime() - range.start.getTime()
   
-  const dayMs = 24 * 3600000
-  const leftPercent = (startMs / dayMs) * 100
-  const widthPercent = ((endMs - startMs) / dayMs) * 100
+  const leftPercent = (startOffset / rangeMs) * 100
+  const widthPercent = ((endOffset - startOffset) / rangeMs) * 100
   
   return {
-    left: `${leftPercent}%`,
-    width: `${widthPercent}%`
+    left: `${Math.max(0, leftPercent)}%`,
+    width: `${Math.min(100 - Math.max(0, leftPercent), widthPercent)}%`
   }
 }
 
 const getCurrentTimePosition = () => {
   const now = currentTime.value
-  const ms = now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000
-  const dayMs = 24 * 3600000
-  const percent = (ms / dayMs) * 100
+  const range = getTimelineRange()
+  const rangeMs = range.end.getTime() - range.start.getTime()
+  const offset = now.getTime() - range.start.getTime()
+  const percent = (offset / rangeMs) * 100
   
   return {
-    left: `${percent}%`
+    left: `${Math.max(0, Math.min(100, percent))}%`
   }
 }
 
