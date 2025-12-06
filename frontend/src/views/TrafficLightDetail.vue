@@ -1,133 +1,193 @@
 <template>
-  <div class="detail-container">
-    <div v-if="trafficLight" class="detail-card">
-      <div class="card-header">
-        <router-link to="/" class="btn-back">← Back</router-link>
-        <h2>{{ trafficLight.location }}</h2>
-        <button @click="deleteTrafficLight" class="btn-delete-icon" title="Delete">🗑️</button>
-      </div>
+  <v-container>
+    <v-row v-if="trafficLight">
+      <v-col cols="12">
+        <!-- Header Card -->
+        <v-card class="mb-4">
+          <v-card-title class="d-flex align-center">
+            <v-btn
+              :to="'/'"
+              icon="mdi-arrow-left"
+              variant="text"
+              class="mr-2"
+            ></v-btn>
+            <v-icon icon="mdi-traffic-light" class="mr-2" color="primary"></v-icon>
+            {{ trafficLight.location }}
+            <v-spacer></v-spacer>
+            <v-btn
+              @click="deleteTrafficLight"
+              icon="mdi-delete"
+              color="error"
+              variant="text"
+            ></v-btn>
+          </v-card-title>
+        </v-card>
 
-      <div class="card-content">
+        <!-- Prediction Section -->
+        <v-card v-if="pattern && pattern.has_pattern && pattern.next_green_start" class="mb-4">
+          <v-card-title>
+            <v-icon icon="mdi-map-marker-check" class="mr-2"></v-icon>
+            Next Expected Green Phase
+          </v-card-title>
+          <v-card-text class="text-center">
+            <v-sheet
+              :color="getTrafficLightState() === 'state-green' ? 'success' : getTrafficLightState() === 'state-red' ? 'error' : 'grey'"
+              class="countdown-box pa-6 rounded-lg"
+              elevation="4"
+            >
+              <div class="text-h6 mb-2">{{ getTrafficLightStateLabel() }}</div>
+              <div class="text-h2 font-weight-bold countdown-time">{{ getCountdownText() }}</div>
+            </v-sheet>
+          </v-card-text>
+        </v-card>
 
-        <div v-if="pattern && pattern.has_pattern && pattern.next_green_start" class="prediction-section">
-          <h3>📍 Next Expected Green Phase</h3>
-          <div class="prediction-display">
-            <div :class="['countdown-box', getTrafficLightState()]">
-              <div class="countdown-label">{{ getTrafficLightStateLabel() }}</div>
-              <div class="countdown-time">{{ getCountdownText() }}</div>
-            </div>
-          </div>
-        </div>
+        <!-- Pattern Section -->
+        <v-card v-if="pattern" class="mb-4">
+          <v-card-title>
+            <v-icon icon="mdi-chart-line" class="mr-2"></v-icon>
+            Detected Schedule
+          </v-card-title>
+          <v-card-text>
+            <v-row v-if="pattern.has_pattern">
+              <v-col cols="6" md="4">
+                <v-sheet color="primary" class="pa-4 rounded text-center">
+                  <div class="text-caption">Typical Duration</div>
+                  <div class="text-h6 font-weight-bold">{{ formatDuration(pattern.typical_duration_ms) }}</div>
+                </v-sheet>
+              </v-col>
+              <v-col cols="6" md="4">
+                <v-sheet color="primary" class="pa-4 rounded text-center">
+                  <div class="text-caption">Range</div>
+                  <div class="text-h6 font-weight-bold">{{ formatDuration(pattern.min_duration_ms) }} - {{ formatDuration(pattern.max_duration_ms) }}</div>
+                </v-sheet>
+              </v-col>
+              <v-col v-if="pattern.schedule_regularity" cols="6" md="4">
+                <v-sheet color="primary" class="pa-4 rounded text-center">
+                  <div class="text-caption">Regularity</div>
+                  <div class="text-h6 font-weight-bold">{{ capitalizeFirst(pattern.schedule_regularity) }}</div>
+                </v-sheet>
+              </v-col>
+              <v-col v-if="pattern.average_cycle_ms" cols="6" md="4">
+                <v-sheet color="primary" class="pa-4 rounded text-center">
+                  <div class="text-caption">Cycle Time</div>
+                  <div class="text-h6 font-weight-bold">{{ formatDuration(pattern.average_cycle_ms) }}</div>
+                </v-sheet>
+              </v-col>
+              <v-col cols="6" md="4">
+                <v-sheet color="primary" class="pa-4 rounded text-center">
+                  <div class="text-caption">Based on</div>
+                  <div class="text-h6 font-weight-bold">{{ pattern.total_captures }} capture{{ pattern.total_captures !== 1 ? 's' : '' }}</div>
+                </v-sheet>
+              </v-col>
+            </v-row>
+            <v-alert v-else type="info" variant="tonal">
+              No schedule detected yet. Capture green light durations to analyze patterns.
+            </v-alert>
+          </v-card-text>
+        </v-card>
 
-        <div v-if="pattern" class="pattern-section">
-          <h3>📊 Detected Schedule</h3>
-          
-          <div v-if="pattern.has_pattern" class="pattern-info">
-            <div class="pattern-item">
-              <label>Typical Duration</label>
-              <p class="value">{{ formatDuration(pattern.typical_duration_ms) }}</p>
-            </div>
-            
-            <div class="pattern-item">
-              <label>Range</label>
-              <p class="value">{{ formatDuration(pattern.min_duration_ms) }} - {{ formatDuration(pattern.max_duration_ms) }}</p>
-            </div>
-            
-            <div v-if="pattern.schedule_regularity" class="pattern-item">
-              <label>Regularity</label>
-              <p class="value">{{ capitalizeFirst(pattern.schedule_regularity) }}</p>
-            </div>
-            
-            <div v-if="pattern.average_cycle_ms" class="pattern-item">
-              <label>Cycle Time</label>
-              <p class="value">{{ formatDuration(pattern.average_cycle_ms) }}</p>
-            </div>
-            
-            <div class="pattern-item">
-              <label>Based on</label>
-              <p class="value">{{ pattern.total_captures }} capture{{ pattern.total_captures !== 1 ? 's' : '' }}</p>
-            </div>
-          </div>
-          
-          <div v-else class="empty-pattern">
-            <p>No schedule detected yet. Capture green light durations to analyze patterns.</p>
-          </div>
-        </div>
-
-        <div v-if="timeline && timeline.has_pattern" class="timeline-section">
-          <h3>🕐 Predicted Pattern Timeline</h3>
-          <div class="timeline-info">
-            <p v-if="timeline.validation" class="validation-info">
+        <!-- Timeline Section -->
+        <v-card v-if="timeline && timeline.has_pattern" class="mb-4">
+          <v-card-title>
+            <v-icon icon="mdi-clock-outline" class="mr-2"></v-icon>
+            Predicted Pattern Timeline
+          </v-card-title>
+          <v-card-text>
+            <div v-if="timeline.validation" class="text-center text-caption mb-4">
               Pattern confidence: {{ (timeline.validation.match_rate * 100).toFixed(0) }}%
               ({{ timeline.validation.matches }}/{{ timeline.validation.total }} measurements match)
-            </p>
-          </div>
-          <div class="timeline-container">
-            <div class="timeline-hours">
-              <div v-for="hour in 24" :key="hour" class="hour-marker">
-                {{ String(hour - 1).padStart(2, '0') }}:00
-              </div>
             </div>
-            <div class="timeline-bar">
-              <div 
-                v-for="(entry, index) in timeline.entries" 
-                :key="index"
-                :class="['timeline-entry', `state-${entry.state}`]"
-                :style="getTimelineEntryStyle(entry)"
-                :title="`${entry.state.toUpperCase()}: ${formatTimelineTime(entry.start_time)} - ${formatTimelineTime(entry.end_time)}`"
-              >
+            <v-sheet color="surface-variant" class="pa-4 rounded">
+              <div class="timeline-hours">
+                <div v-for="hour in 24" :key="hour" class="hour-marker text-caption">
+                  {{ String(hour - 1).padStart(2, '0') }}:00
+                </div>
               </div>
-              <div class="timeline-current-time" :style="getCurrentTimePosition()"></div>
-            </div>
-          </div>
-        </div>
+              <div class="timeline-bar">
+                <div 
+                  v-for="(entry, index) in timeline.entries" 
+                  :key="index"
+                  :class="['timeline-entry', `state-${entry.state}`]"
+                  :style="getTimelineEntryStyle(entry)"
+                  :title="`${entry.state.toUpperCase()}: ${formatTimelineTime(entry.start_time)} - ${formatTimelineTime(entry.end_time)}`"
+                >
+                </div>
+                <div class="timeline-current-time" :style="getCurrentTimePosition()"></div>
+              </div>
+            </v-sheet>
+          </v-card-text>
+        </v-card>
 
-        <div class="metadata-section">
-          <h3>Metadata</h3>
-          
-          <div class="metadata-item">
-            <label>ID</label>
-            <p class="monospace">{{ trafficLight.id }}</p>
-          </div>
+        <!-- Metadata Section -->
+        <v-card class="mb-4">
+          <v-card-title>
+            <v-icon icon="mdi-information" class="mr-2"></v-icon>
+            Metadata
+          </v-card-title>
+          <v-card-text>
+            <v-list>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">ID</v-list-item-title>
+                <v-list-item-subtitle class="font-weight-mono">{{ trafficLight.id }}</v-list-item-subtitle>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">Latitude</v-list-item-title>
+                <v-list-item-subtitle class="font-weight-mono">{{ trafficLight.latitude }}</v-list-item-subtitle>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">Longitude</v-list-item-title>
+                <v-list-item-subtitle class="font-weight-mono">{{ trafficLight.longitude }}</v-list-item-subtitle>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">Notes</v-list-item-title>
+                <v-list-item-subtitle>{{ trafficLight.notes || 'No notes' }}</v-list-item-subtitle>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">Created At</v-list-item-title>
+                <v-list-item-subtitle class="font-weight-mono">{{ formatDate(trafficLight.created_at) }}</v-list-item-subtitle>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-title class="text-caption text-grey">Last Updated</v-list-item-title>
+                <v-list-item-subtitle class="font-weight-mono">{{ formatDate(trafficLight.last_updated) }}</v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
 
-          <div class="metadata-item">
-            <label>Latitude</label>
-            <p class="monospace">{{ trafficLight.latitude }}</p>
-          </div>
+        <!-- Actions -->
+        <v-btn
+          @click="scheduleInformation"
+          color="primary"
+          size="large"
+          prepend-icon="mdi-calendar"
+          block
+        >
+          Schedule Information
+        </v-btn>
+      </v-col>
+    </v-row>
 
-          <div class="metadata-item">
-            <label>Longitude</label>
-            <p class="monospace">{{ trafficLight.longitude }}</p>
-          </div>
+    <!-- Loading State -->
+    <v-row v-else>
+      <v-col cols="12" class="text-center">
+        <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+        <div class="text-h6 mt-4">Loading...</div>
+      </v-col>
+    </v-row>
 
-          <div class="metadata-item">
-            <label>Notes</label>
-            <p>{{ trafficLight.notes || 'No notes' }}</p>
-          </div>
-
-          <div class="metadata-item">
-            <label>Created At</label>
-            <p class="monospace">{{ formatDate(trafficLight.created_at) }}</p>
-          </div>
-
-          <div class="metadata-item">
-            <label>Last Updated</label>
-            <p class="monospace">{{ formatDate(trafficLight.last_updated) }}</p>
-          </div>
-        </div>
-
-        <div class="actions-section">
-          <button @click="scheduleInformation" class="btn btn-primary">
-            📅 Schedule Information
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-else class="loading-or-error">
-      <p>Loading...</p>
-    </div>
-  </div>
+    <!-- Delete Confirmation Dialog -->
+    <v-dialog v-model="showDeleteDialog" max-width="400">
+      <v-card>
+        <v-card-title>Delete Traffic Light?</v-card-title>
+        <v-card-text>Are you sure you want to delete this traffic light? This action cannot be undone.</v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn @click="showDeleteDialog = false" variant="text">Cancel</v-btn>
+          <v-btn @click="confirmDelete" color="error">Delete</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -182,6 +242,7 @@ const apiClient = instance?.appContext.config.globalProperties.$apiClient as Api
 const trafficLight = ref<TrafficLight | null>(null)
 const pattern = ref<SchedulePattern | null>(null)
 const timeline = ref<DailyTimeline | null>(null)
+const showDeleteDialog = ref(false)
 let countdownTimer: number | null = null
 const currentTime = ref(new Date())
 
@@ -214,9 +275,11 @@ const fetchTimeline = async () => {
   }
 }
 
-const deleteTrafficLight = async () => {
-  if (!confirm('Are you sure you want to delete this traffic light?')) return
+const deleteTrafficLight = () => {
+  showDeleteDialog.value = true
+}
 
+const confirmDelete = async () => {
   const id = route.params.id
   try {
     await apiClient.delete(`/api/traffic-lights/${id}`)
@@ -225,6 +288,8 @@ const deleteTrafficLight = async () => {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error(err)
     alert('Error: ' + message)
+  } finally {
+    showDeleteDialog.value = false
   }
 }
 
@@ -400,156 +465,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.detail-container {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 1rem 0;
-  min-height: 100%;
+.countdown-box {
+  border: 3px solid currentColor;
 }
 
-.detail-card {
-  background: #2d2d2d;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border: 1px solid #444;
-  width: 100%;
-  max-width: 600px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: #1f1f1f;
-  border-bottom: 1px solid #444;
-}
-
-.btn-back {
-  background: #3a3a3a;
-  color: #e0e0e0;
-  border: 1px solid #555;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  text-decoration: none;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-back:hover {
-  background: #4a4a4a;
-}
-
-.btn-delete-icon {
-  background: none;
-  border: none;
-  font-size: 1.3rem;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.3s;
-  padding: 0.5rem;
-}
-
-.btn-delete-icon:hover {
-  opacity: 1;
-}
-
-.card-content {
-  padding: 2rem;
-}
-
-.card-content h2 {
-  font-size: 1.8rem;
-  margin-bottom: 2rem;
-  color: #e0e0e0;
-}
-
-.pattern-section {
-  margin-bottom: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 2px solid #444;
-}
-
-.pattern-section h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: #e0e0e0;
-}
-
-.pattern-info {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-}
-
-.pattern-item {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1rem;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.pattern-item label {
-  display: block;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.85rem;
-  margin-bottom: 0.5rem;
-}
-
-.pattern-item .value {
-  color: white;
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.empty-pattern {
-  background: #3a3a3a;
-  padding: 1.5rem;
-  border-radius: 8px;
-  text-align: center;
-  color: #888;
-}
-
-.timeline-section {
-  margin-bottom: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 2px solid #444;
-}
-
-.timeline-section h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: #e0e0e0;
-}
-
-.timeline-info {
-  margin-bottom: 1rem;
-}
-
-.validation-info {
-  font-size: 0.9rem;
-  color: #888;
-  text-align: center;
-}
-
-.timeline-container {
-  background: #1f1f1f;
-  border-radius: 8px;
-  padding: 1rem;
-  overflow-x: auto;
+.countdown-time {
+  font-family: 'Monaco', 'Courier New', monospace;
+  letter-spacing: 2px;
 }
 
 .timeline-hours {
   display: flex;
   justify-content: space-between;
   margin-bottom: 0.5rem;
-  font-size: 0.75rem;
-  color: #888;
 }
 
 .hour-marker {
@@ -615,224 +543,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 8px rgba(251, 191, 36, 0.8);
 }
 
-.prediction-section {
-  margin-bottom: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 2px solid #444;
-}
-
-.prediction-section h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-  color: #e0e0e0;
-}
-
-.prediction-display {
-  display: flex;
-  justify-content: center;
-}
-
-.countdown-box {
-  padding: 2rem 3rem;
-  border-radius: 12px;
-  text-align: center;
-  min-width: 280px;
-  transition: all 0.3s ease;
-  border: 3px solid;
-}
-
-.countdown-box.state-green {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: #22c55e;
-}
-
-.countdown-box.state-red {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-}
-
-.countdown-box.state-unknown {
-  background: rgba(107, 114, 128, 0.2);
-  border-color: #6b7280;
-}
-
-.countdown-label {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.countdown-box.state-green .countdown-label {
-  color: #22c55e;
-}
-
-.countdown-box.state-red .countdown-label {
-  color: #ef4444;
-}
-
-.countdown-box.state-unknown .countdown-label {
-  color: #6b7280;
-}
-
-.countdown-time {
-  font-size: 3rem;
-  font-weight: 700;
-  font-family: 'Monaco', 'Courier New', monospace;
-  letter-spacing: 2px;
-}
-
-.countdown-box.state-green .countdown-time {
-  color: #22c55e;
-}
-
-.countdown-box.state-red .countdown-time {
-  color: #ef4444;
-}
-
-.countdown-box.state-unknown .countdown-time {
-  color: #6b7280;
-}
-
-.prediction-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.prediction-item {
-  background: #2d5a2d;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 4px solid #22c55e;
-}
-
-.prediction-item label {
-  display: block;
-  font-weight: 600;
-  color: #22c55e;
-  font-size: 0.85rem;
-  margin-bottom: 0.5rem;
-}
-
-.prediction-item .value {
-  color: #e0e0e0;
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
-.metadata-section {
-  margin-bottom: 2rem;
-}
-
-.metadata-section h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: #e0e0e0;
-  border-bottom: 2px solid #444;
-  padding-bottom: 0.5rem;
-}
-
-.metadata-item {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #3a3a3a;
-  border-radius: 8px;
-}
-
-.metadata-item label {
-  display: block;
-  font-weight: 600;
-  color: #667eea;
-  font-size: 0.85rem;
-  margin-bottom: 0.25rem;
-}
-
-.metadata-item p {
-  color: #e0e0e0;
-  margin: 0;
-  word-break: break-all;
-}
-
-.monospace {
+.font-weight-mono {
   font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-}
-
-.actions-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #3a3a3a;
-  color: #e0e0e0;
-  border: 1px solid #555;
-}
-
-.btn-secondary:hover {
-  background: #4a4a4a;
-}
-
-.loading-or-error {
-  text-align: center;
-  padding: 2rem;
-  color: #888;
-}
-
-/* Mobile Optimization */
-@media (max-width: 600px) {
-  .detail-container {
-    padding: 0.5rem 0;
-  }
-
-  .detail-card {
-    margin: 0 0.5rem;
-    border-radius: 0;
-  }
-
-  .card-content {
-    padding: 1.5rem;
-  }
-
-  .card-content h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .card-header {
-    padding: 0.75rem;
-  }
-
-  .btn-back {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.9rem;
-  }
 }
 </style>

@@ -3,6 +3,7 @@ import App from './App.vue'
 import router, { setupAuthGuard } from './router'
 import { OIDCClient, AuthManager } from './auth'
 import { ApiClient } from './api'
+import vuetify from './plugins/vuetify'
 
 // Configuration from environment variables
 const OIDC_PROVIDER_URL = import.meta.env.VITE_OIDC_PROVIDER_URL || 'https://sso.sendzik.eu/realms/home'
@@ -50,5 +51,6 @@ if (code && state) {
   app.config.globalProperties.$oidcClient = oidcClient
 
   app.use(router)
+  app.use(vuetify)
   app.mount('#app')
 }

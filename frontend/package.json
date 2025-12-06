@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "lucide-vue-next": "^0.556.0",
     "vue": "^3.5.22",
-    "vue-router": "^4.6.3"
+    "vue-router": "^4.6.3",
+    "vuetify": "^3.11.2"
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.2",
@@ -24,4 +26,3 @@
     "vue-tsc": "^3.1.1"
   }
 }
-

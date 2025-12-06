@@ -43,9 +43,6 @@ yarn-debug.log*
 yarn-error.log*
 .npm
 pnpm-debug.log*
-.pnpm-lock.yaml
-package-lock.json
-yarn.lock
 
 # Frontend build
 frontend/dist/

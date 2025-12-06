@@ -1,68 +1,118 @@
 <template>
-  <div class="add-container">
-    <div class="add-form-card">
-      <h2>Add New Traffic Light</h2>
+  <v-container>
+    <v-row justify="center">
+      <v-col cols="12" md="8" lg="6">
+        <v-card>
+          <v-card-title class="text-h5 d-flex align-center">
+            <v-icon icon="mdi-traffic-light" class="mr-2" color="primary"></v-icon>
+            Add New Traffic Light
+          </v-card-title>
 
-      <form @submit.prevent="addTrafficLight" class="add-form">
-        <div class="form-group">
-          <label for="location">Location *</label>
-          <input
-            id="location"
-            v-model="newTrafficLight.location"
-            type="text"
-            placeholder="e.g., Main St & 5th Ave"
-            required
-            autofocus
-          />
-        </div>
+          <v-card-text>
+            <v-form @submit.prevent="addTrafficLight" ref="formRef">
+              <v-text-field
+                v-model="newTrafficLight.location"
+                label="Location"
+                placeholder="e.g., Main St & 5th Ave"
+                prepend-icon="mdi-map-marker"
+                :rules="[rules.required]"
+                required
+                autofocus
+                variant="outlined"
+                class="mb-2"
+              ></v-text-field>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="latitude">Latitude</label>
-            <input
-              id="latitude"
-              v-model.number="newTrafficLight.latitude"
-              type="number"
-              step="0.000001"
-              placeholder="e.g., 40.7128"
-            />
-          </div>
-        </div>
+              <v-row>
+                <v-col cols="12" sm="6">
+                  <v-text-field
+                    v-model.number="newTrafficLight.latitude"
+                    label="Latitude"
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g., 40.7128"
+                    prepend-icon="mdi-latitude"
+                    variant="outlined"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-text-field
+                    v-model.number="newTrafficLight.longitude"
+                    label="Longitude"
+                    type="number"
+                    step="0.000001"
+                    placeholder="e.g., -74.0060"
+                    prepend-icon="mdi-longitude"
+                    variant="outlined"
+                  ></v-text-field>
+                </v-col>
+              </v-row>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="longitude">Longitude</label>
-            <input
-              id="longitude"
-              v-model.number="newTrafficLight.longitude"
-              type="number"
-              step="0.000001"
-              placeholder="e.g., -74.0060"
-            />
-          </div>
-        </div>
+              <v-textarea
+                v-model="newTrafficLight.notes"
+                label="Notes"
+                prepend-icon="mdi-note-text"
+                rows="3"
+                variant="outlined"
+                class="mb-4"
+              ></v-textarea>
 
-        <div class="form-group">
-          <label for="notes">Notes</label>
-          <textarea
-            id="notes"
-            v-model="newTrafficLight.notes"
-            placeholder="Add any additional notes..."
-            rows="3"
-          ></textarea>
-        </div>
+              <v-card-actions class="px-0">
+                <v-btn
+                  type="submit"
+                  color="primary"
+                  size="large"
+                  prepend-icon="mdi-plus"
+                  :loading="loading"
+                  block
+                >
+                  Add Traffic Light
+                </v-btn>
+              </v-card-actions>
+              <v-card-actions class="px-0">
+                <v-btn
+                  :to="'/'"
+                  variant="outlined"
+                  size="large"
+                  prepend-icon="mdi-cancel"
+                  block
+                >
+                  Cancel
+                </v-btn>
+              </v-card-actions>
+            </v-form>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
 
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">
-            Add Traffic Light
-          </button>
-          <router-link to="/" class="btn btn-secondary">
-            Cancel
-          </router-link>
-        </div>
-      </form>
-    </div>
-  </div>
+    <!-- Success Snackbar -->
+    <v-snackbar
+      v-model="showSuccess"
+      color="success"
+      location="top"
+      :timeout="3000"
+    >
+      Traffic light added successfully!
+    </v-snackbar>
+
+    <!-- Error Snackbar -->
+    <v-snackbar
+      v-model="showError"
+      color="error"
+      location="top"
+      :timeout="5000"
+    >
+      {{ errorMessage }}
+      <template v-slot:actions>
+        <v-btn
+          variant="text"
+          @click="showError = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -88,12 +138,24 @@ const newTrafficLight = ref<TrafficLightInput>({
   notes: ''
 })
 
+const loading = ref(false)
+const showSuccess = ref(false)
+const showError = ref(false)
+const errorMessage = ref('')
+const formRef = ref()
+
+const rules = {
+  required: (value: string) => !!value || 'This field is required'
+}
+
 const addTrafficLight = async () => {
   if (!newTrafficLight.value.location) {
-    alert('Please fill in all required fields')
+    errorMessage.value = 'Please fill in all required fields'
+    showError.value = true
     return
   }
 
+  loading.value = true
   try {
     await apiClient.post('/api/traffic-lights', newTrafficLight.value)
     
@@ -104,147 +166,20 @@ const addTrafficLight = async () => {
       notes: ''
     }
     
-    router.push('/')
+    showSuccess.value = true
+    setTimeout(() => {
+      router.push('/')
+    }, 1000)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    alert('Error: ' + message)
+    errorMessage.value = message
+    showError.value = true
     console.error(err)
+  } finally {
+    loading.value = false
   }
 }
 </script>
 
 <style scoped>
-.add-container {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 1rem 0;
-  min-height: 100%;
-}
-
-.add-form-card {
-  background: #2d2d2d;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border: 1px solid #444;
-  width: 100%;
-  max-width: 500px;
-}
-
-.add-form-card h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  color: #e0e0e0;
-  text-align: center;
-}
-
-.add-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.form-group label {
-  font-weight: 600;
-  color: #e0e0e0;
-  font-size: 0.9rem;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  padding: 0.75rem;
-  border: 2px solid #444;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-family: inherit;
-  transition: border-color 0.3s;
-  background-color: #3a3a3a;
-  color: #e0e0e0;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.form-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
-  flex: 1;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #3a3a3a;
-  color: #e0e0e0;
-  border: 1px solid #555;
-}
-
-.btn-secondary:hover {
-  background: #4a4a4a;
-}
-
-/* Mobile Optimization */
-@media (max-width: 600px) {
-  .add-container {
-    padding: 0.5rem 0;
-  }
-
-  .add-form-card {
-    padding: 1.5rem;
-    margin: 0 0.5rem;
-  }
-
-  .add-form-card h2 {
-    font-size: 1.2rem;
-    margin-bottom: 1rem;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-}
 </style>
